@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
-import { useCards } from "@/hooks/useCards";
+import { useCards, type CardWithAssignees } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
