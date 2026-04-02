@@ -1,93 +1,69 @@
 
 
-# Correção de 3 Bugs de Interação — WeekView & DayView
+# Refatorar useCards.ts para card_assignees e card_teams
 
-## Resumo
+## Contexto
 
-Três bugs impedem a criação de cards em slots ocupados e o drag-to-move. As correções envolvem 4 arquivos, sem tocar em modal, sidebar, MonthView ou banco.
+A tabela `cards` não tem mais `assigned_to_profile` e `assigned_to_team` nos tipos TypeScript (foram removidos do schema). Isso causa build errors em CalendarCard, CardFormModal e useCards. A solução é enriquecer os cards no hook e exportar um tipo compatível.
 
-## Bug 1 — Criação em slot ocupado
+## Mudanças em useCards.ts
 
-**Causa:** Card único recebe `width: 100%`, cobrindo todo o slot. O `stopPropagation` do CalendarCard bloqueia o clique no slot.
+### 1. Tipo EnrichedCard com campos legados
 
-**Correção em `calendarUtils.ts`:**
-- Quando `maxCol === 1`, usar `width: "calc(92% - 0px)"` em vez de `100%`.
-- Quando `maxCol > 1`, manter cálculo proporcional mas com cap de 92% por card.
-- `left` permanece inalterado.
+```typescript
+type AssigneeInfo = { id: string; full_name: string | null; avatar_url: string | null };
+type TeamInfo = { id: string; name: string };
 
-## Bug 2 — Drag-to-move não funciona
+export type EnrichedCard = Card & {
+  assignees: AssigneeInfo[];
+  teams: TeamInfo[];
+  // Campos legados computados para backward compatibility
+  assigned_to_profile: string | null;
+  assigned_to_team: string | null;
+};
+```
 
-**Causa dupla:**
-1. `handlePointerLeave` no CalendarCard cancela o timer de long-press quando o cursor sai do card (antes dos 500ms).
-2. Mesmo quando o timer dispara, `onMovePointerMove` depende de `onMouseEnter` nos slots, que ficam bloqueados pelo card absolutamente posicionado.
+`assigned_to_profile` = primeiro assignee id (ou null). `assigned_to_team` = primeiro team id (ou null). Isso evita que CalendarCard e CardFormModal quebrem sem precisar editá-los agora.
 
-**Correção em `CalendarCard.tsx`:**
-- Remover a chamada a `onLongPressCancel` do `handlePointerLeave`. O cancelamento só acontece no `handlePointerUp` (clique curto sem drag).
+### 2. Query enriquecida
 
-**Correção em `useDragMove.ts`:**
-- Quando `isDraggingMove` se torna `true` (dentro do setTimeout), registrar `pointermove` e `pointerup` listeners no `document`.
-- No `pointermove`: usar `document.elementFromPoint(e.clientX, e.clientY)` para encontrar o slot sob o cursor, lendo `data-hour` e `data-day` do elemento.
-- No `pointerup`: executar o drop e remover os listeners do document.
-- Remover a dependência de `onMovePointerMove` e `onMovePointerUp` serem chamados pelos slots.
+Após buscar os cards, fazer duas queries paralelas:
 
-**Correção em `WeekView.tsx` e `DayView.tsx`:**
-- Adicionar `data-day={day.toISOString()}` em cada slot div (WeekView já tem `data-hour`; DayView precisa de `data-day` também).
+- `card_assignees` filtrado por `card_id.in(cardIds)`, com select `card_id, profile_id, profiles(id, full_name, avatar_url)`
+- `card_teams` filtrado por `card_id.in(cardIds)`, com select `card_id, team_id, teams(id, name)`
 
-## Bug 3 — Drag-to-select em slots com cards
+Montar mapa `cardId → assignees[]` e `cardId → teams[]`, depois enriquecer cada card.
 
-**Causa:** Mesma do Bug 1 (card cobre o slot).
+### 3. Filtros atualizados
 
-**Correção:** Já resolvida pelo Bug 1 (width 92%). Adicionalmente:
-- Em `WeekView.tsx` e `DayView.tsx`: quando `drag` do `useDragSelect` estiver ativo (não-null), adicionar classe `pointer-events-none` no wrapper dos cards posicionados.
+Em vez de `card.assigned_to_profile`, verificar se `card.assignees.some(a => a.id === filters.profileId)`. Idem para teams.
+
+### 4. Mutations com gerência de junções
+
+Aceitar parâmetros extras opcionais:
+
+```typescript
+type CreateCardInput = TablesInsert<"cards"> & {
+  assignee_ids?: string[];
+  team_ids?: string[];
+};
+```
+
+Após INSERT/UPDATE do card:
+1. DELETE de card_assignees WHERE card_id
+2. INSERT em card_assignees para cada assignee_id
+3. DELETE de card_teams WHERE card_id
+4. INSERT em card_teams para cada team_id
+
+### 5. Nota sobre build errors existentes
+
+CalendarCard e CardFormModal importam `Tables<"cards">` diretamente e referenciam `assigned_to_profile`/`assigned_to_team`. Com o `EnrichedCard` exportando esses campos como propriedades computadas, basta trocar o tipo neles de `Card` para `EnrichedCard` — mas isso será feito num passo seguinte quando os componentes forem atualizados. **Para resolver os build errors agora**, será necessário também atualizar minimamente o tipo usado em CalendarCard e CardFormModal (de `Tables<"cards">` para `EnrichedCard`), o que envolve apenas trocar a importação de tipo, sem mudar lógica visual.
 
 ## Arquivos alterados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/calendar/calendarUtils.ts` | Width máximo 92% para cards (single e multi) |
-| `src/components/calendar/CalendarCard.tsx` | Remover `onLongPressCancel` do `handlePointerLeave` |
-| `src/hooks/useDragMove.ts` | Document-level listeners para pointermove/pointerup durante drag |
-| `src/components/calendar/WeekView.tsx` | `data-day` nos slots, `pointer-events-none` nos cards durante drag-select |
-| `src/components/calendar/DayView.tsx` | `data-day` nos slots, `pointer-events-none` nos cards durante drag-select |
-
-## Detalhes técnicos
-
-**useDragMove — document listeners:**
-```text
-setTimeout callback (500ms):
-  isDraggingMove = true
-  setDragMove(...)
-  
-  const onDocMove = (e: PointerEvent) => {
-    const el = document.elementFromPoint(e.clientX, e.clientY)
-    const slot = el?.closest('[data-hour]')
-    if (slot) {
-      hour = Number(slot.dataset.hour)
-      day = new Date(slot.dataset.day)
-      setDragMove(prev => ({...prev, currentDay: day, currentHour: hour}))
-    }
-  }
-  
-  const onDocUp = () => {
-    // execute drop logic
-    document.removeEventListener('pointermove', onDocMove)
-    document.removeEventListener('pointerup', onDocUp)
-  }
-  
-  document.addEventListener('pointermove', onDocMove)
-  document.addEventListener('pointerup', onDocUp)
-```
-
-**calendarUtils — width cap:**
-```text
-// Dentro do loop de groups:
-const widthPercent = Math.min((1 / maxCol) * 100, 92);
-width: `calc(${widthPercent}% - ${gapPx * 2}px)`
-```
-
-**WeekView/DayView — pointer-events durante drag-select:**
-Importar `drag` do `useDragSelect` e aplicar no wrapper dos cards:
-```text
-<div className={`absolute z-[5] px-0.5 ${drag ? 'pointer-events-none' : ''}`} ...>
-```
+| `src/hooks/useCards.ts` | Queries enriquecidas, EnrichedCard, mutations com junções |
+| `src/components/calendar/CalendarCard.tsx` | Trocar tipo `Tables<"cards">` → `EnrichedCard` (só import) |
+| `src/components/calendar/CardFormModal.tsx` | Trocar tipo `Tables<"cards">` → `EnrichedCard` (só import) |
 
