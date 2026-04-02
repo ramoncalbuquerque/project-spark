@@ -1,5 +1,5 @@
 import { useCalendar } from "@/contexts/CalendarContext";
-import { useCards } from "@/hooks/useCards";
+import { useCards, type CardWithAssignees } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import CalendarCard from "./CalendarCard";
@@ -15,12 +15,12 @@ import {
   isSameDay,
   parseISO,
 } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
+
 
 const WEEK_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MAX_VISIBLE = 3;
 
-function getCardsForDay(cards: Tables<"cards">[], day: Date) {
+function getCardsForDay(cards: CardWithAssignees[], day: Date) {
   return cards.filter((c) => isSameDay(parseISO(c.start_date), day));
 }
 
