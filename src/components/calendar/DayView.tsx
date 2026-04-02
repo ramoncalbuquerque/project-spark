@@ -108,18 +108,13 @@ const DayView = () => {
   const handleSlotMouseEnter = useCallback(
     (hour: number) => {
       onSelectMove(selectedDate, hour);
-      onMovePointerMove(selectedDate, hour);
     },
-    [onSelectMove, onMovePointerMove, selectedDate]
+    [onSelectMove, selectedDate]
   );
 
   const handleGlobalUp = useCallback(() => {
-    if (dragMove) {
-      onMovePointerUp();
-    } else {
-      onSelectUp();
-    }
-  }, [dragMove, onMovePointerUp, onSelectUp]);
+    onSelectUp();
+  }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
     (card: Tables<"cards">) => {
