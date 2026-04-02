@@ -175,6 +175,7 @@ const CardFormModal = () => {
       const payload = {
         title: title.trim(),
         card_type: cardType,
+        status,
         start_date: new Date(startDate).toISOString(),
         end_date: endDate ? new Date(endDate).toISOString() : null,
         all_day: allDay,
