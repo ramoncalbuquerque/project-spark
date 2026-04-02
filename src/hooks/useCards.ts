@@ -150,6 +150,18 @@ export function useCards() {
   const cards = allCards.filter((card) => {
     if (filters.profileId && !card.assignees.some((a) => a.id === filters.profileId)) return false;
     if (filters.teamId && !card.teams.some((t) => t.id === filters.teamId)) return false;
+    if (filters.cardType && card.card_type !== filters.cardType) return false;
+    if (filters.priority && card.priority !== filters.priority) return false;
+    if (filters.status) {
+      if (filters.status === "overdue") {
+        // Overdue = not completed + past deadline
+        const dateStr = card.end_date || card.start_date;
+        const isPast = dateStr ? new Date(dateStr) < new Date() : false;
+        if (card.status === "completed" || !isPast) return false;
+      } else {
+        if (card.status !== filters.status) return false;
+      }
+    }
     return true;
   });
 
