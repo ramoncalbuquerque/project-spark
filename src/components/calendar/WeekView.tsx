@@ -140,18 +140,13 @@ const WeekView = () => {
   const handleSlotMouseEnter = useCallback(
     (day: Date, hour: number) => {
       onSelectMove(day, hour);
-      onMovePointerMove(day, hour);
     },
-    [onSelectMove, onMovePointerMove]
+    [onSelectMove]
   );
 
   const handleGlobalUp = useCallback(() => {
-    if (dragMove) {
-      onMovePointerUp();
-    } else {
-      onSelectUp();
-    }
-  }, [dragMove, onMovePointerUp, onSelectUp]);
+    onSelectUp();
+  }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
     (card: Tables<"cards">) => {
