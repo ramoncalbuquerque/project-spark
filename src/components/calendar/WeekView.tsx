@@ -112,11 +112,11 @@ const WeekView = () => {
     dragMove,
     startLongPress,
     cancelLongPress,
-    onMovePointerMove,
-    onMovePointerUp,
     isCardBeingDragged,
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
+
+  const { drag } = useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -140,18 +140,13 @@ const WeekView = () => {
   const handleSlotMouseEnter = useCallback(
     (day: Date, hour: number) => {
       onSelectMove(day, hour);
-      onMovePointerMove(day, hour);
     },
-    [onSelectMove, onMovePointerMove]
+    [onSelectMove]
   );
 
   const handleGlobalUp = useCallback(() => {
-    if (dragMove) {
-      onMovePointerUp();
-    } else {
-      onSelectUp();
-    }
-  }, [dragMove, onMovePointerUp, onSelectUp]);
+    onSelectUp();
+  }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
     (card: Tables<"cards">) => {
@@ -258,6 +253,7 @@ const WeekView = () => {
                       onMouseEnter={() => handleSlotMouseEnter(day, hour)}
                       onTouchStart={() => handleSlotMouseDown(day, hour)}
                       data-hour={hour}
+                      data-day={day.toISOString()}
                     />
                   );
                 })}
@@ -275,7 +271,7 @@ const WeekView = () => {
                 {positioned.map((pc) => (
                   <div
                     key={pc.card.id}
-                    className="absolute z-[5] px-0.5"
+                    className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
                     style={{
                       top: pc.top,
                       height: pc.height,

@@ -70,11 +70,9 @@ const CalendarCard = ({
   );
 
   const handlePointerLeave = useCallback(() => {
-    // Don't cancel if we're already in drag mode
-    if (!isDragging) {
-      onLongPressCancel?.();
-    }
-  }, [isDragging, onLongPressCancel]);
+    // Don't cancel on leave — only cancel on short click (pointerUp)
+    // This allows the long-press timer to fire even if cursor moves off the card
+  }, []);
 
   return (
     <button

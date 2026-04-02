@@ -68,11 +68,11 @@ const DayView = () => {
     dragMove,
     startLongPress,
     cancelLongPress,
-    onMovePointerMove,
-    onMovePointerUp,
     isCardBeingDragged,
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
+
+  const { drag } = useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -108,18 +108,13 @@ const DayView = () => {
   const handleSlotMouseEnter = useCallback(
     (hour: number) => {
       onSelectMove(selectedDate, hour);
-      onMovePointerMove(selectedDate, hour);
     },
-    [onSelectMove, onMovePointerMove, selectedDate]
+    [onSelectMove, selectedDate]
   );
 
   const handleGlobalUp = useCallback(() => {
-    if (dragMove) {
-      onMovePointerUp();
-    } else {
-      onSelectUp();
-    }
-  }, [dragMove, onMovePointerUp, onSelectUp]);
+    onSelectUp();
+  }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
     (card: Tables<"cards">) => {
@@ -187,6 +182,7 @@ const DayView = () => {
                   onMouseEnter={() => handleSlotMouseEnter(hour)}
                   onTouchStart={() => handleSlotMouseDown(hour)}
                   data-hour={hour}
+                  data-day={selectedDate.toISOString()}
                 />
               );
             })}
@@ -204,7 +200,7 @@ const DayView = () => {
             {positioned.map((pc) => (
               <div
                 key={pc.card.id}
-                className="absolute z-[5] px-0.5"
+                className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
                 style={{
                   top: pc.top,
                   height: pc.height,

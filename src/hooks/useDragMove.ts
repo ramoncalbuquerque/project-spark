@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { parseISO, differenceInMinutes, addMinutes, setHours, setMinutes } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -24,6 +24,21 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
   const [dragMove, setDragMove] = useState<DragMoveState | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingMove = useRef(false);
+  const dragMoveRef = useRef<DragMoveState | null>(null);
+  const onMoveRef = useRef(onMove);
+  onMoveRef.current = onMove;
+
+  // Keep ref in sync with state for use in document listeners
+  useEffect(() => {
+    dragMoveRef.current = dragMove;
+  }, [dragMove]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
 
   const startLongPress = useCallback(
     (card: Card, day: Date, hour: number) => {
@@ -35,52 +50,60 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
           durationMinutes = Math.max(15, differenceInMinutes(parseISO(card.end_date), start));
         }
         isDraggingMove.current = true;
-        setDragMove({
+        const state: DragMoveState = {
           card,
           originDay: day,
           originHour: hour,
           currentDay: day,
           currentHour: hour,
           durationMinutes,
-        });
+        };
+        setDragMove(state);
+        dragMoveRef.current = state;
+
+        // Register document-level listeners for tracking movement
+        const onDocMove = (e: PointerEvent) => {
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const slot = el?.closest("[data-hour]") as HTMLElement | null;
+          if (slot && slot.dataset.hour && slot.dataset.day) {
+            const newHour = Number(slot.dataset.hour);
+            const newDay = new Date(slot.dataset.day);
+            const prev = dragMoveRef.current;
+            if (prev && (prev.currentDay.getTime() !== newDay.getTime() || prev.currentHour !== newHour)) {
+              const updated = { ...prev, currentDay: newDay, currentHour: newHour };
+              dragMoveRef.current = updated;
+              setDragMove(updated);
+            }
+          }
+        };
+
+        const onDocUp = () => {
+          document.removeEventListener("pointermove", onDocMove);
+          document.removeEventListener("pointerup", onDocUp);
+
+          const dm = dragMoveRef.current;
+          if (!isDraggingMove.current || !dm) {
+            isDraggingMove.current = false;
+            setDragMove(null);
+            return;
+          }
+          isDraggingMove.current = false;
+
+          const newStart = setMinutes(setHours(new Date(dm.currentDay), dm.currentHour), 0);
+          const hasEnd = !!dm.card.end_date;
+          const newEnd = hasEnd ? addMinutes(newStart, dm.durationMinutes) : null;
+
+          setDragMove(null);
+          dragMoveRef.current = null;
+          onMoveRef.current(dm.card, newStart, newEnd);
+        };
+
+        document.addEventListener("pointermove", onDocMove);
+        document.addEventListener("pointerup", onDocUp);
       }, LONG_PRESS_MS);
     },
     [enabled]
   );
-
-  const cancelLongPress = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  const onMovePointerMove = useCallback(
-    (day: Date, hour: number) => {
-      if (!isDraggingMove.current || !dragMove) return;
-      if (dragMove.currentDay.getTime() !== day.getTime() || dragMove.currentHour !== hour) {
-        setDragMove((prev) => (prev ? { ...prev, currentDay: day, currentHour: hour } : null));
-      }
-    },
-    [dragMove]
-  );
-
-  const onMovePointerUp = useCallback(() => {
-    cancelLongPress();
-    if (!isDraggingMove.current || !dragMove) {
-      isDraggingMove.current = false;
-      setDragMove(null);
-      return;
-    }
-    isDraggingMove.current = false;
-
-    const newStart = setMinutes(setHours(new Date(dragMove.currentDay), dragMove.currentHour), 0);
-    const hasEnd = !!dragMove.card.end_date;
-    const newEnd = hasEnd ? addMinutes(newStart, dragMove.durationMinutes) : null;
-
-    setDragMove(null);
-    onMove(dragMove.card, newStart, newEnd);
-  }, [dragMove, onMove, cancelLongPress]);
 
   const isCardBeingDragged = useCallback(
     (cardId: string) => dragMove?.card.id === cardId,
@@ -96,8 +119,6 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
     dragMove,
     startLongPress,
     cancelLongPress,
-    onMovePointerMove,
-    onMovePointerUp,
     isCardBeingDragged,
     getDropSlot,
     isDraggingMove: isDraggingMove.current,
