@@ -9,7 +9,7 @@ import CalendarCard from "./CalendarCard";
 import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
 import { format, isToday, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Tables } from "@/integrations/supabase/types";
+
 
 /** Ghost preview of where the card will be dropped */
 const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; durationMinutes: number; cardType: string }) => {

@@ -15,7 +15,7 @@ import {
   isSameDay,
   parseISO,
 } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
+
 
 const WEEK_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MAX_VISIBLE = 3;
