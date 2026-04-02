@@ -49,7 +49,7 @@ const DayView = () => {
     [openCreateModal]
   );
 
-  const { isSlotSelected, onPointerDown: onSelectDown, onPointerMove: onSelectMove, onPointerUp: onSelectUp } =
+  const { drag, isSlotSelected, onPointerDown: onSelectDown, onPointerMove: onSelectMove, onPointerUp: onSelectUp } =
     useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
 
   // Drag-to-move
