@@ -16,7 +16,19 @@ export interface PositionedCard {
   width: string;
 }
 
-/** Get all timed (non all_day) cards for a given day */
+interface CardItem {
+  card: Card;
+  top: number;
+  height: number;
+  startMinutes: number;
+  endMinutes: number;
+}
+
+interface ColAssignment {
+  item: CardItem;
+  col: number;
+}
+
 export function getTimedCardsForDay(cards: Card[], day: Date): Card[] {
   return cards.filter((c) => {
     const d = parseISO(c.start_date);
@@ -24,17 +36,15 @@ export function getTimedCardsForDay(cards: Card[], day: Date): Card[] {
   });
 }
 
-/** Calculate absolute position and size for each card, handling overlaps */
 export function positionCards(cards: Card[], day: Date): PositionedCard[] {
   const dayCards = getTimedCardsForDay(cards, day);
 
-  // Calculate raw top/height for each card
-  const items = dayCards.map((card) => {
+  const items: CardItem[] = dayCards.map((card) => {
     const start = parseISO(card.start_date);
     const startMinutes = (start.getHours() - START_HOUR) * 60 + start.getMinutes();
     const top = (startMinutes / 60) * SLOT_HEIGHT;
 
-    let durationMinutes = 60; // default 1 hour
+    let durationMinutes = 60;
     if (card.end_date) {
       const end = parseISO(card.end_date);
       durationMinutes = Math.max(15, differenceInMinutes(end, start));
@@ -44,21 +54,16 @@ export function positionCards(cards: Card[], day: Date): PositionedCard[] {
     return { card, top, height, startMinutes, endMinutes: startMinutes + durationMinutes };
   });
 
-  // Sort by start time, then by duration (longer first)
   items.sort((a, b) => a.startMinutes - b.startMinutes || b.endMinutes - a.endMinutes);
 
-  // Detect overlap groups and assign columns
-  const columns: { endMinutes: number; index: number }[] = [];
-  const assignments: { item: typeof items[0]; col: number; totalCols: number }[] = [];
+  const columns: number[] = []; // tracks endMinutes per column
+  const colAssignments: ColAssignment[] = [];
 
-  // Assign each item to the first available column
-  const colAssignments: { item: typeof items[0]; col: number }[] = [];
-  
   for (const item of items) {
     let placed = false;
     for (let c = 0; c < columns.length; c++) {
-      if (item.startMinutes >= columns[c].endMinutes) {
-        columns[c].endMinutes = item.endMinutes;
+      if (item.startMinutes >= columns[c]) {
+        columns[c] = item.endMinutes;
         colAssignments.push({ item, col: c });
         placed = true;
         break;
@@ -66,13 +71,12 @@ export function positionCards(cards: Card[], day: Date): PositionedCard[] {
     }
     if (!placed) {
       colAssignments.push({ item, col: columns.length });
-      columns.push({ endMinutes: item.endMinutes, index: columns.length });
+      columns.push(item.endMinutes);
     }
   }
 
-  // Now determine overlap groups to know totalCols for each card
-  // Group overlapping cards together
-  const groups: typeof colAssignments[][] = [];
+  // Group overlapping cards
+  const groups: ColAssignment[][] = [];
   for (const ca of colAssignments) {
     let addedToGroup = false;
     for (const group of groups) {
@@ -90,7 +94,7 @@ export function positionCards(cards: Card[], day: Date): PositionedCard[] {
     }
   }
 
-  // Merge groups that overlap with each other
+  // Merge overlapping groups
   let merged = true;
   while (merged) {
     merged = false;
@@ -129,7 +133,6 @@ export function positionCards(cards: Card[], day: Date): PositionedCard[] {
   return result;
 }
 
-/** Get cards for a specific slot (used for MonthView or simple slot rendering) */
 export function getCardsForSlot(cards: Card[], day: Date, hour: number) {
   return cards.filter((c) => {
     const d = parseISO(c.start_date);
