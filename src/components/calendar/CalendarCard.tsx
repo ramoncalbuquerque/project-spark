@@ -1,10 +1,9 @@
 import { useRef, useCallback, useMemo } from "react";
-import type { Tables } from "@/integrations/supabase/types";
+import type { EnrichedCard } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { Users } from "lucide-react";
-import { useAllProfiles } from "@/hooks/useTeams";
 
-type Card = Tables<"cards">;
+type Card = EnrichedCard;
 
 const TYPE_COLORS: Record<string, string> = {
   task: "bg-[#1E88E5] border-[#1565C0]",
