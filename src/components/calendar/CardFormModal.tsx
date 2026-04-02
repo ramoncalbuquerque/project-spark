@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useCardModal } from "@/contexts/CardContext";
 import { useCards } from "@/hooks/useCards";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAllProfiles, useTeams } from "@/hooks/useTeams";
 import {
   Dialog,
   DialogContent,
@@ -22,8 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 
 const CARD_TYPES = [
   { value: "task", label: "📋 Tarefa" },
@@ -47,6 +49,8 @@ const CardFormModal = () => {
   const { createCard, updateCard, deleteCard } = useCards();
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const allProfiles = useAllProfiles();
+  const { teams } = useTeams();
 
   const [title, setTitle] = useState("");
   const [cardType, setCardType] = useState("task");
@@ -55,10 +59,18 @@ const CardFormModal = () => {
   const [allDay, setAllDay] = useState(false);
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
+  const [assignTab, setAssignTab] = useState<"person" | "team">("person");
+  const [assignedProfile, setAssignedProfile] = useState<string>("");
+  const [assignedTeam, setAssignedTeam] = useState<string>("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Reset form on open
+  // Only show teams created by the current user (leader)
+  const myTeams = useMemo(
+    () => teams.filter((t) => t.created_by === user?.id),
+    [teams, user?.id]
+  );
+
   useEffect(() => {
     if (!isModalOpen) {
       setConfirmDelete(false);
@@ -72,6 +84,15 @@ const CardFormModal = () => {
       setAllDay(editingCard.all_day);
       setPriority(editingCard.priority);
       setDescription(editingCard.description || "");
+      if (editingCard.assigned_to_team) {
+        setAssignTab("team");
+        setAssignedTeam(editingCard.assigned_to_team);
+        setAssignedProfile("");
+      } else {
+        setAssignTab("person");
+        setAssignedProfile(editingCard.assigned_to_profile || "");
+        setAssignedTeam("");
+      }
     } else {
       setTitle("");
       setCardType("task");
@@ -80,6 +101,9 @@ const CardFormModal = () => {
       setAllDay(false);
       setPriority("medium");
       setDescription("");
+      setAssignTab("person");
+      setAssignedProfile("");
+      setAssignedTeam("");
     }
     setConfirmDelete(false);
   }, [isModalOpen, editingCard, defaultDate, defaultEndDate]);
@@ -96,6 +120,8 @@ const CardFormModal = () => {
         all_day: allDay,
         priority,
         description: description.trim() || null,
+        assigned_to_profile: assignTab === "person" && assignedProfile ? assignedProfile : null,
+        assigned_to_team: assignTab === "team" && assignedTeam ? assignedTeam : null,
       };
       if (editingCard) {
         await updateCard.mutateAsync({ id: editingCard.id, ...payload });
@@ -225,6 +251,84 @@ const CardFormModal = () => {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Assignment */}
+          <div className="space-y-2">
+            <Label>Atribuir a</Label>
+            <Tabs
+              value={assignTab}
+              onValueChange={(v) => {
+                setAssignTab(v as "person" | "team");
+                if (v === "person") setAssignedTeam("");
+                else setAssignedProfile("");
+              }}
+            >
+              <TabsList className="w-full">
+                <TabsTrigger value="person" className="flex-1">Pessoa</TabsTrigger>
+                <TabsTrigger value="team" className="flex-1">Time</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            {assignTab === "person" ? (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={assignedProfile || "none"}
+                  onValueChange={(v) => setAssignedProfile(v === "none" ? "" : v)}
+                >
+                  <SelectTrigger className="h-11 flex-1">
+                    <SelectValue placeholder="Ninguém" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Ninguém</SelectItem>
+                    {allProfiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.full_name || "Sem nome"} ({p.role})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {assignedProfile && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setAssignedProfile("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={assignedTeam || "none"}
+                  onValueChange={(v) => setAssignedTeam(v === "none" ? "" : v)}
+                >
+                  <SelectTrigger className="h-11 flex-1">
+                    <SelectValue placeholder="Nenhum" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {myTeams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {assignedTeam && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setAssignedTeam("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Description */}

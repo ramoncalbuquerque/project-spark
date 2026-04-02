@@ -1,6 +1,8 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useMemo } from "react";
 import type { Tables } from "@/integrations/supabase/types";
 import { useCardModal } from "@/contexts/CardContext";
+import { Users } from "lucide-react";
+import { useAllProfiles } from "@/hooks/useTeams";
 
 type Card = Tables<"cards">;
 
@@ -41,11 +43,20 @@ const CalendarCard = ({
   onLongPressCancel,
 }: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
+  const allProfiles = useAllProfiles();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
   const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
   const isShort = height !== undefined && height < 30;
   const pointerDownTime = useRef(0);
+
+  const assigneeName = useMemo(() => {
+    if (!card.assigned_to_profile) return null;
+    const p = allProfiles.find((pr) => pr.id === card.assigned_to_profile);
+    return p?.full_name || null;
+  }, [card.assigned_to_profile, allProfiles]);
+
+  const assigneeInitial = assigneeName ? assigneeName[0]?.toUpperCase() : null;
 
   const handlePointerDown = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -61,7 +72,6 @@ const CalendarCard = ({
       e.stopPropagation();
       onLongPressCancel?.();
       const elapsed = Date.now() - pointerDownTime.current;
-      // Short click → open edit modal (only if not dragging)
       if (elapsed < 400 && !isDragging) {
         openEditModal(card);
       }
@@ -71,7 +81,6 @@ const CalendarCard = ({
 
   const handlePointerLeave = useCallback(() => {
     // Don't cancel on leave — only cancel on short click (pointerUp)
-    // This allows the long-press timer to fire even if cursor moves off the card
   }, []);
 
   return (
@@ -81,7 +90,7 @@ const CalendarCard = ({
       onMouseUp={handlePointerUp}
       onTouchEnd={handlePointerUp}
       onMouseLeave={handlePointerLeave}
-      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start ${color} ${
+      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start relative ${color} ${
         isDragging ? "opacity-30" : ""
       }`}
       title={card.title}
@@ -94,6 +103,20 @@ const CalendarCard = ({
             {badge.label}
           </span>
         </>
+      )}
+      {/* Assignee indicator */}
+      {!isShort && (card.assigned_to_profile || card.assigned_to_team) && (
+        <div className="absolute bottom-0.5 right-1">
+          {card.assigned_to_team ? (
+            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center">
+              <Users className="h-2.5 w-2.5 text-white" />
+            </div>
+          ) : assigneeInitial ? (
+            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white">
+              {assigneeInitial}
+            </div>
+          ) : null}
+        </div>
       )}
     </button>
   );

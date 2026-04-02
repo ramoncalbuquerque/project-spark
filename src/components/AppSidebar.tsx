@@ -1,4 +1,4 @@
-import { Calendar, Users, Filter, Plus } from "lucide-react";
+import { Calendar, Users, Filter, Plus, X } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -13,9 +13,18 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import MiniCalendar from "@/components/MiniCalendar";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCalendar } from "@/contexts/CalendarContext";
+import { useAllProfiles, useTeams } from "@/hooks/useTeams";
 
 const navItems = [
   { title: "Calendário", url: "/dashboard", icon: Calendar },
@@ -26,7 +35,12 @@ export function AppSidebar() {
   const { setOpenMobile } = useSidebar();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
+  const { filters, setFilters, clearFilters } = useCalendar();
+  const allProfiles = useAllProfiles();
+  const { teams } = useTeams();
   const isLeader = profile?.role === "leader";
+
+  const hasFilters = filters.profileId || filters.teamId;
 
   return (
     <Sidebar className="border-r border-border bg-card">
@@ -79,31 +93,103 @@ export function AppSidebar() {
 
         <Separator />
 
-        {/* Filters placeholder */}
+        {/* Filters */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             <Filter className="mr-2 h-3.5 w-3.5" />
             Filtros
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <p className="px-3 py-2 text-xs text-muted-foreground">
-              Filtros disponíveis em breve
-            </p>
+            <div className="px-3 space-y-2 pb-2">
+              <Select
+                value={filters.profileId || "all"}
+                onValueChange={(v) =>
+                  setFilters({ ...filters, profileId: v === "all" ? null : v, teamId: null })
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Filtrar por pessoa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as pessoas</SelectItem>
+                  {allProfiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.full_name || "Sem nome"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={filters.teamId || "all"}
+                onValueChange={(v) =>
+                  setFilters({ ...filters, teamId: v === "all" ? null : v, profileId: null })
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Filtrar por time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os times</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {hasFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full h-7 text-xs text-muted-foreground"
+                  onClick={clearFilters}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Limpar filtros
+                </Button>
+              )}
+            </div>
           </SidebarGroupContent>
         </SidebarGroup>
 
         <Separator />
 
-        {/* Teams placeholder */}
+        {/* Teams list */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             <Users className="mr-2 h-3.5 w-3.5" />
             Times
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <p className="px-3 py-2 text-xs text-muted-foreground">
-              Seus times aparecerão aqui
-            </p>
+            {teams.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Nenhum time encontrado
+              </p>
+            ) : (
+              <SidebarMenu>
+                {teams.map((team) => (
+                  <SidebarMenuItem key={team.id}>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setFilters({ profileId: null, teamId: team.id });
+                        setOpenMobile(false);
+                      }}
+                      className={`text-xs ${
+                        filters.teamId === team.id ? "bg-accent text-primary font-medium" : ""
+                      }`}
+                    >
+                      <Users className="mr-2 h-3.5 w-3.5" />
+                      <span className="truncate">{team.name}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {team.member_count}
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

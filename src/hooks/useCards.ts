@@ -9,7 +9,6 @@ import {
   endOfDay,
   startOfMonth,
   endOfMonth,
-  addDays,
 } from "date-fns";
 import { toast } from "sonner";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
@@ -24,7 +23,6 @@ function getDateRange(selectedDate: Date, viewMode: "day" | "week" | "month") {
     const ws = startOfWeek(selectedDate, { weekStartsOn: 1 });
     return { start: ws, end: endOfWeek(selectedDate, { weekStartsOn: 1 }) };
   }
-  // month — include overflow weeks
   const ms = startOfMonth(selectedDate);
   const me = endOfMonth(selectedDate);
   const calStart = startOfWeek(ms, { weekStartsOn: 1 });
@@ -34,7 +32,7 @@ function getDateRange(selectedDate: Date, viewMode: "day" | "week" | "month") {
 
 export function useCards() {
   const { user } = useAuth();
-  const { selectedDate, viewMode } = useCalendar();
+  const { selectedDate, viewMode, filters } = useCalendar();
   const queryClient = useQueryClient();
 
   const { start, end } = getDateRange(selectedDate, viewMode);
@@ -43,7 +41,7 @@ export function useCards() {
 
   const queryKey = ["cards", startISO, endISO];
 
-  const { data: cards = [], isLoading } = useQuery({
+  const { data: allCards = [], isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -56,6 +54,13 @@ export function useCards() {
       return data as Card[];
     },
     enabled: !!user,
+  });
+
+  // Apply client-side filters
+  const cards = allCards.filter((card) => {
+    if (filters.profileId && card.assigned_to_profile !== filters.profileId) return false;
+    if (filters.teamId && card.assigned_to_team !== filters.teamId) return false;
+    return true;
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["cards"] });
