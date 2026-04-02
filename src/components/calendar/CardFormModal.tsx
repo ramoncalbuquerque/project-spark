@@ -207,7 +207,7 @@ const CardFormModal = () => {
         className={
           isMobile
             ? "fixed inset-0 max-w-none w-full h-full rounded-none translate-x-0 translate-y-0 left-0 top-0 flex flex-col"
-            : "max-w-lg"
+            : "max-w-lg max-h-[90vh] flex flex-col"
         }
       >
         <DialogHeader>
