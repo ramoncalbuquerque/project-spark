@@ -182,6 +182,7 @@ const DayView = () => {
                   onMouseEnter={() => handleSlotMouseEnter(hour)}
                   onTouchStart={() => handleSlotMouseDown(hour)}
                   data-hour={hour}
+                  data-day={selectedDate.toISOString()}
                 />
               );
             })}
