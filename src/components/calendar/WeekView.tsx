@@ -112,11 +112,11 @@ const WeekView = () => {
     dragMove,
     startLongPress,
     cancelLongPress,
-    onMovePointerMove,
-    onMovePointerUp,
     isCardBeingDragged,
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
+
+  const { drag } = useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
 
   useEffect(() => {
     if (scrollRef.current) {
