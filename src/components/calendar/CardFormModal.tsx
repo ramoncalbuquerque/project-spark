@@ -63,7 +63,8 @@ const AssignChip = ({ label, onRemove }: { label: string; onRemove: () => void }
 const CardFormModal = () => {
   const { isModalOpen, editingCard, defaultDate, defaultEndDate, closeModal } = useCardModal();
   const { createCard, updateCard, deleteCard } = useCards();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isLeader = profile?.role === "leader";
   const isMobile = useIsMobile();
   const allProfiles = useAllProfiles();
   const { teams } = useTeams();
