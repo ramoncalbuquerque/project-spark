@@ -138,6 +138,7 @@ const CardFormModal = () => {
       setStartDate(defaultDate ? toLocalDatetime(defaultDate) : toLocalDatetime(new Date()));
       setEndDate(defaultEndDate ? toLocalDatetime(defaultEndDate) : "");
       setAllDay(false);
+      setStatus("pending");
       setPriority("medium");
       setDescription("");
       setAssignTab("person");
