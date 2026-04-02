@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { parseISO, differenceInMinutes, addMinutes, setHours, setMinutes } from "date-fns";
 import { flushSync } from "react-dom";
-import type { CardWithAssignees } from "@/hooks/useCards";
+import type { Tables } from "@/integrations/supabase/types";
 
-type Card = CardWithAssignees;
+type Card = Tables<"cards">;
 
 interface DragMoveState {
   card: Card;

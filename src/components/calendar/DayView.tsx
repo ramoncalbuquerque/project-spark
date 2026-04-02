@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
-import { useCards, type CardWithAssignees } from "@/hooks/useCards";
+import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDragSelect } from "@/hooks/useDragSelect";
@@ -9,7 +9,7 @@ import CalendarCard from "./CalendarCard";
 import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
 import { format, isToday, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
+import type { Tables } from "@/integrations/supabase/types";
 
 /** Ghost preview of where the card will be dropped */
 const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; durationMinutes: number; cardType: string }) => {
@@ -54,13 +54,11 @@ const DayView = () => {
 
   // Drag-to-move
   const handleMove = useCallback(
-    (card: CardWithAssignees, newStart: Date, newEnd: Date | null) => {
+    (card: Tables<"cards">, newStart: Date, newEnd: Date | null) => {
       updateCard.mutate({
         id: card.id,
-        updates: {
-          start_date: newStart.toISOString(),
-          end_date: newEnd ? newEnd.toISOString() : card.end_date,
-        },
+        start_date: newStart.toISOString(),
+        end_date: newEnd ? newEnd.toISOString() : card.end_date,
       });
     },
     [updateCard]
@@ -119,7 +117,7 @@ const DayView = () => {
   }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
-    (card: CardWithAssignees) => {
+    (card: Tables<"cards">) => {
       const start = parseISO(card.start_date);
       startLongPress(card, selectedDate, start.getHours());
     },

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
-import { useCards, type CardWithAssignees } from "@/hooks/useCards";
+import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,7 +16,7 @@ import {
   parseISO,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
+import type { Tables } from "@/integrations/supabase/types";
 
 const HOUR_COL_W = "w-12 min-w-[3rem]";
 const DAY_COL_W = "min-w-[44px]";
@@ -98,13 +98,11 @@ const WeekView = () => {
 
   // Drag-to-move
   const handleMove = useCallback(
-    (card: CardWithAssignees, newStart: Date, newEnd: Date | null) => {
+    (card: Tables<"cards">, newStart: Date, newEnd: Date | null) => {
       updateCard.mutate({
         id: card.id,
-        updates: {
-          start_date: newStart.toISOString(),
-          end_date: newEnd ? newEnd.toISOString() : card.end_date,
-        },
+        start_date: newStart.toISOString(),
+        end_date: newEnd ? newEnd.toISOString() : card.end_date,
       });
     },
     [updateCard]
@@ -151,7 +149,7 @@ const WeekView = () => {
   }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
-    (card: CardWithAssignees) => {
+    (card: Tables<"cards">) => {
       const start = parseISO(card.start_date);
       // Find which day column this card belongs to
       const matchingDay = days.find(

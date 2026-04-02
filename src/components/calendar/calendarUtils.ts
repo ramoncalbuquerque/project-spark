@@ -1,7 +1,7 @@
 import { parseISO, isSameDay, differenceInMinutes } from "date-fns";
-import type { CardWithAssignees } from "@/hooks/useCards";
+import type { Tables } from "@/integrations/supabase/types";
 
-type Card = CardWithAssignees;
+type Card = Tables<"cards">;
 
 export const START_HOUR = 6;
 export const END_HOUR = 22;

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from "react";
-import type { CardWithAssignees } from "@/hooks/useCards";
+import type { Tables } from "@/integrations/supabase/types";
 
-type Card = CardWithAssignees;
+type Card = Tables<"cards">;
 
 interface CardContextType {
   isModalOpen: boolean;

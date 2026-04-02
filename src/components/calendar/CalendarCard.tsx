@@ -1,7 +1,10 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useMemo } from "react";
+import type { Tables } from "@/integrations/supabase/types";
 import { useCardModal } from "@/contexts/CardContext";
 import { Users } from "lucide-react";
-import type { CardWithAssignees } from "@/hooks/useCards";
+import { useAllProfiles } from "@/hooks/useTeams";
+
+type Card = Tables<"cards">;
 
 const TYPE_COLORS: Record<string, string> = {
   task: "bg-[#1E88E5] border-[#1565C0]",
@@ -23,11 +26,11 @@ const PRIORITY_BADGES: Record<string, { label: string; className: string }> = {
 };
 
 interface CalendarCardProps {
-  card: CardWithAssignees;
+  card: Card;
   compact?: boolean;
   height?: number;
   isDragging?: boolean;
-  onLongPressStart?: (card: CardWithAssignees) => void;
+  onLongPressStart?: (card: Card) => void;
   onLongPressCancel?: () => void;
 }
 
@@ -40,11 +43,20 @@ const CalendarCard = ({
   onLongPressCancel,
 }: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
+  const allProfiles = useAllProfiles();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
   const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
   const isShort = height !== undefined && height < 30;
   const pointerDownTime = useRef(0);
+
+  const assigneeName = useMemo(() => {
+    if (!card.assigned_to_profile) return null;
+    const p = allProfiles.find((pr) => pr.id === card.assigned_to_profile);
+    return p?.full_name || null;
+  }, [card.assigned_to_profile, allProfiles]);
+
+  const assigneeInitial = assigneeName ? assigneeName[0]?.toUpperCase() : null;
 
   const handlePointerDown = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -67,11 +79,9 @@ const CalendarCard = ({
     [card, isDragging, openEditModal, onLongPressCancel]
   );
 
-  const handlePointerLeave = useCallback(() => {}, []);
-
-  const hasAssignees = card.assignees.length > 0;
-  const hasTeams = card.teams.length > 0;
-  const showAssignees = !isShort && (hasAssignees || hasTeams);
+  const handlePointerLeave = useCallback(() => {
+    // Don't cancel on leave — only cancel on short click (pointerUp)
+  }, []);
 
   return (
     <button
@@ -94,34 +104,18 @@ const CalendarCard = ({
           </span>
         </>
       )}
-      {/* Assignee indicators */}
-      {showAssignees && (
-        <div className="absolute bottom-0.5 right-1 flex items-center gap-0.5">
-          {/* Person avatars - stacked */}
-          {hasAssignees && (
-            <div className="flex -space-x-1.5">
-              {card.assignees.slice(0, 3).map((a) => (
-                <div
-                  key={a.profile_id}
-                  className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white border border-white/20"
-                  title={a.full_name || ""}
-                >
-                  {a.full_name?.[0]?.toUpperCase() || "?"}
-                </div>
-              ))}
-              {card.assignees.length > 3 && (
-                <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[7px] font-bold text-white border border-white/20">
-                  +{card.assignees.length - 3}
-                </div>
-              )}
-            </div>
-          )}
-          {/* Team icon */}
-          {hasTeams && (
-            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center" title={card.teams.map((t) => t.name).join(", ")}>
+      {/* Assignee indicator */}
+      {!isShort && (card.assigned_to_profile || card.assigned_to_team) && (
+        <div className="absolute bottom-0.5 right-1">
+          {card.assigned_to_team ? (
+            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center">
               <Users className="h-2.5 w-2.5 text-white" />
             </div>
-          )}
+          ) : assigneeInitial ? (
+            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white">
+              {assigneeInitial}
+            </div>
+          ) : null}
         </div>
       )}
     </button>
