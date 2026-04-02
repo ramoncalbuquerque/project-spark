@@ -271,6 +271,29 @@ const CardFormModal = () => {
             </Select>
           </div>
 
+          {/* Status — shown in edit mode or for leaders */}
+          {(editingCard || isLeader) && (
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select
+                value={status}
+                onValueChange={setStatus}
+                disabled={isMember && !isAssignedMember}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStatuses.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* All day */}
           <div className="flex items-center gap-2">
             <Checkbox
