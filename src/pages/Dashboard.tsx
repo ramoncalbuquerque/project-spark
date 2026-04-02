@@ -1,15 +1,20 @@
-import { Calendar } from "lucide-react";
+import CalendarToolbar from "@/components/calendar/CalendarToolbar";
+import WeekView from "@/components/calendar/WeekView";
+import DayView from "@/components/calendar/DayView";
+import MonthView from "@/components/calendar/MonthView";
+import { useCalendar } from "@/contexts/CalendarContext";
 
 const Dashboard = () => {
+  const { viewMode } = useCalendar();
+
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center">
-      <Calendar className="h-12 w-12 text-muted-foreground/40 mb-4" />
-      <h2 className="text-lg font-semibold text-foreground mb-1">
-        Seu calendário aparecerá aqui
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        Em breve você poderá visualizar suas demandas no calendário.
-      </p>
+    <div className="flex flex-col h-full">
+      <CalendarToolbar />
+      <div className="flex-1 min-h-0">
+        {viewMode === "week" && <WeekView />}
+        {viewMode === "day" && <DayView />}
+        {viewMode === "month" && <MonthView />}
+      </div>
     </div>
   );
 };
