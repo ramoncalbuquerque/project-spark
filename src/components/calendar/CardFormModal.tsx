@@ -44,6 +44,20 @@ function toLocalDatetime(d: Date) {
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
+/** Chip for selected person/team */
+const AssignChip = ({ label, onRemove }: { label: string; onRemove: () => void }) => (
+  <span className="inline-flex items-center gap-1 rounded-full bg-muted border border-border px-3 h-8 text-sm text-foreground">
+    <span className="truncate max-w-[140px]">{label}</span>
+    <button
+      type="button"
+      onClick={onRemove}
+      className="shrink-0 rounded-full hover:bg-muted-foreground/20 p-0.5"
+    >
+      <X className="h-3.5 w-3.5" />
+    </button>
+  </span>
+);
+
 const CardFormModal = () => {
   const { isModalOpen, editingCard, defaultDate, defaultEndDate, closeModal } = useCardModal();
   const { createCard, updateCard, deleteCard } = useCards();
@@ -60,15 +74,26 @@ const CardFormModal = () => {
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
   const [assignTab, setAssignTab] = useState<"person" | "team">("person");
-  const [assignedProfile, setAssignedProfile] = useState<string>("");
-  const [assignedTeam, setAssignedTeam] = useState<string>("");
+  const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Only show teams created by the current user (leader)
   const myTeams = useMemo(
     () => teams.filter((t) => t.created_by === user?.id),
     [teams, user?.id]
+  );
+
+  // Profiles not yet selected
+  const availableProfiles = useMemo(
+    () => allProfiles.filter((p) => !selectedProfileIds.includes(p.id)),
+    [allProfiles, selectedProfileIds]
+  );
+
+  // Teams not yet selected
+  const availableTeams = useMemo(
+    () => myTeams.filter((t) => !selectedTeamIds.includes(t.id)),
+    [myTeams, selectedTeamIds]
   );
 
   useEffect(() => {
@@ -84,15 +109,9 @@ const CardFormModal = () => {
       setAllDay(editingCard.all_day);
       setPriority(editingCard.priority);
       setDescription(editingCard.description || "");
-      if (editingCard.assigned_to_team) {
-        setAssignTab("team");
-        setAssignedTeam(editingCard.assigned_to_team);
-        setAssignedProfile("");
-      } else {
-        setAssignTab("person");
-        setAssignedProfile(editingCard.assigned_to_profile || "");
-        setAssignedTeam("");
-      }
+      setSelectedProfileIds(editingCard.assignees?.map((a) => a.id) ?? []);
+      setSelectedTeamIds(editingCard.teams?.map((t) => t.id) ?? []);
+      setAssignTab(editingCard.teams?.length ? "team" : "person");
     } else {
       setTitle("");
       setCardType("task");
@@ -102,11 +121,31 @@ const CardFormModal = () => {
       setPriority("medium");
       setDescription("");
       setAssignTab("person");
-      setAssignedProfile("");
-      setAssignedTeam("");
+      setSelectedProfileIds([]);
+      setSelectedTeamIds([]);
     }
     setConfirmDelete(false);
   }, [isModalOpen, editingCard, defaultDate, defaultEndDate]);
+
+  const handleAddProfile = (id: string) => {
+    if (id && id !== "none" && !selectedProfileIds.includes(id)) {
+      setSelectedProfileIds((prev) => [...prev, id]);
+    }
+  };
+
+  const handleRemoveProfile = (id: string) => {
+    setSelectedProfileIds((prev) => prev.filter((pid) => pid !== id));
+  };
+
+  const handleAddTeam = (id: string) => {
+    if (id && id !== "none" && !selectedTeamIds.includes(id)) {
+      setSelectedTeamIds((prev) => [...prev, id]);
+    }
+  };
+
+  const handleRemoveTeam = (id: string) => {
+    setSelectedTeamIds((prev) => prev.filter((tid) => tid !== id));
+  };
 
   const handleSave = async () => {
     if (!title.trim() || !startDate || !user) return;
@@ -120,8 +159,8 @@ const CardFormModal = () => {
         all_day: allDay,
         priority,
         description: description.trim() || null,
-        assigned_to_profile: assignTab === "person" && assignedProfile ? assignedProfile : null,
-        assigned_to_team: assignTab === "team" && assignedTeam ? assignedTeam : null,
+        assignee_ids: selectedProfileIds,
+        team_ids: selectedTeamIds,
       };
       if (editingCard) {
         await updateCard.mutateAsync({ id: editingCard.id, ...payload });
@@ -147,6 +186,16 @@ const CardFormModal = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const getProfileLabel = (id: string) => {
+    const p = allProfiles.find((pr) => pr.id === id);
+    return p?.full_name || "Sem nome";
+  };
+
+  const getTeamLabel = (id: string) => {
+    const t = myTeams.find((tm) => tm.id === id);
+    return t?.name || "Time";
   };
 
   return (
@@ -253,79 +302,81 @@ const CardFormModal = () => {
             </Select>
           </div>
 
-          {/* Assignment */}
+          {/* Assignment — Multi-select */}
           <div className="space-y-2">
             <Label>Atribuir a</Label>
             <Tabs
               value={assignTab}
-              onValueChange={(v) => {
-                setAssignTab(v as "person" | "team");
-                if (v === "person") setAssignedTeam("");
-                else setAssignedProfile("");
-              }}
+              onValueChange={(v) => setAssignTab(v as "person" | "team")}
             >
               <TabsList className="w-full">
-                <TabsTrigger value="person" className="flex-1">Pessoa</TabsTrigger>
-                <TabsTrigger value="team" className="flex-1">Time</TabsTrigger>
+                <TabsTrigger value="person" className="flex-1">
+                  Pessoa {selectedProfileIds.length > 0 && `(${selectedProfileIds.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="team" className="flex-1">
+                  Time {selectedTeamIds.length > 0 && `(${selectedTeamIds.length})`}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 
             {assignTab === "person" ? (
-              <div className="flex items-center gap-2">
+              <div className="space-y-2">
                 <Select
-                  value={assignedProfile || "none"}
-                  onValueChange={(v) => setAssignedProfile(v === "none" ? "" : v)}
+                  value="none"
+                  onValueChange={handleAddProfile}
                 >
-                  <SelectTrigger className="h-11 flex-1">
-                    <SelectValue placeholder="Ninguém" />
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Selecionar pessoa..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Ninguém</SelectItem>
-                    {allProfiles.map((p) => (
+                    <SelectItem value="none" disabled>Selecionar pessoa...</SelectItem>
+                    {availableProfiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name || "Sem nome"} ({p.role})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {assignedProfile && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => setAssignedProfile("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                {selectedProfileIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedProfileIds.map((id) => (
+                      <AssignChip
+                        key={id}
+                        label={getProfileLabel(id)}
+                        onRemove={() => handleRemoveProfile(id)}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="space-y-2">
                 <Select
-                  value={assignedTeam || "none"}
-                  onValueChange={(v) => setAssignedTeam(v === "none" ? "" : v)}
+                  value="none"
+                  onValueChange={handleAddTeam}
                 >
-                  <SelectTrigger className="h-11 flex-1">
-                    <SelectValue placeholder="Nenhum" />
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Selecionar time..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {myTeams.map((t) => (
+                    <SelectItem value="none" disabled>Selecionar time...</SelectItem>
+                    {availableTeams.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {assignedTeam && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => setAssignedTeam("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                {selectedTeamIds.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedTeamIds.map((id) => (
+                      <AssignChip
+                        key={id}
+                        label={getTeamLabel(id)}
+                        onRemove={() => handleRemoveTeam(id)}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
             )}
