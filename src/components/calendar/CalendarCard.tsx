@@ -1,10 +1,9 @@
 import { useRef, useCallback, useMemo } from "react";
-import type { Tables } from "@/integrations/supabase/types";
+import type { EnrichedCard } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { Users } from "lucide-react";
-import { useAllProfiles } from "@/hooks/useTeams";
 
-type Card = Tables<"cards">;
+type Card = EnrichedCard;
 
 const TYPE_COLORS: Record<string, string> = {
   task: "bg-[#1E88E5] border-[#1565C0]",
@@ -43,7 +42,6 @@ const CalendarCard = ({
   onLongPressCancel,
 }: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
-  const allProfiles = useAllProfiles();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
   const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
@@ -51,10 +49,9 @@ const CalendarCard = ({
   const pointerDownTime = useRef(0);
 
   const assigneeName = useMemo(() => {
-    if (!card.assigned_to_profile) return null;
-    const p = allProfiles.find((pr) => pr.id === card.assigned_to_profile);
-    return p?.full_name || null;
-  }, [card.assigned_to_profile, allProfiles]);
+    if (!card.assignees?.length) return null;
+    return card.assignees[0]?.full_name || null;
+  }, [card.assignees]);
 
   const assigneeInitial = assigneeName ? assigneeName[0]?.toUpperCase() : null;
 
@@ -105,9 +102,9 @@ const CalendarCard = ({
         </>
       )}
       {/* Assignee indicator */}
-      {!isShort && (card.assigned_to_profile || card.assigned_to_team) && (
+      {!isShort && (card.assignees?.length > 0 || card.teams?.length > 0) && (
         <div className="absolute bottom-0.5 right-1">
-          {card.assigned_to_team ? (
+          {card.teams?.length > 0 ? (
             <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center">
               <Users className="h-2.5 w-2.5 text-white" />
             </div>
