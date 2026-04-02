@@ -2,6 +2,7 @@ import { useRef, useCallback, useMemo } from "react";
 import type { EnrichedCard } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { Users } from "lucide-react";
+import { isPast, parseISO } from "date-fns";
 
 type Card = EnrichedCard;
 
@@ -24,7 +25,22 @@ const PRIORITY_BADGES: Record<string, { label: string; className: string }> = {
   urgent: { label: "Urgente", className: "bg-red-400/40 text-red-100" },
 };
 
+const STATUS_DOTS: Record<string, string> = {
+  pending: "bg-gray-300",
+  in_progress: "bg-blue-400",
+  completed: "bg-green-400",
+  overdue: "bg-red-500",
+};
+
 const MAX_VISIBLE_INITIALS = 3;
+
+/** Check if a card is visually overdue */
+export function isCardOverdue(card: Card): boolean {
+  if (card.status === "completed") return false;
+  const dateStr = card.end_date || card.start_date;
+  if (!dateStr) return false;
+  return isPast(parseISO(dateStr));
+}
 
 interface CalendarCardProps {
   card: Card;
@@ -49,6 +65,10 @@ const CalendarCard = ({
   const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
   const isShort = height !== undefined && height < 30;
   const pointerDownTime = useRef(0);
+
+  const overdue = useMemo(() => isCardOverdue(card), [card]);
+  const displayStatus = overdue ? "overdue" : card.status;
+  const statusDot = STATUS_DOTS[displayStatus] || STATUS_DOTS.pending;
 
   const assignees = card.assignees ?? [];
   const teams = card.teams ?? [];
@@ -93,12 +113,16 @@ const CalendarCard = ({
       onMouseUp={handlePointerUp}
       onTouchEnd={handlePointerUp}
       onMouseLeave={handlePointerLeave}
-      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start relative ${color} ${
+      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start relative ${color} ${
         isDragging ? "opacity-30" : ""
-      }`}
+      } ${overdue ? "border-l-[3px] !border-l-red-500" : "border-l-2"}`}
       title={card.title}
     >
-      <span className="truncate font-bold block w-full">{card.title}</span>
+      {/* Title row with status dot */}
+      <span className="truncate font-bold block w-full flex items-center gap-1">
+        <span className={`inline-block h-2 w-2 rounded-full shrink-0 ${statusDot}`} />
+        <span className="truncate">{card.title}</span>
+      </span>
       {!isShort && !compact && (
         <>
           <span className="truncate block w-full text-[10px] text-white/80">{typeLabel}</span>
@@ -107,7 +131,7 @@ const CalendarCard = ({
           </span>
         </>
       )}
-      {/* Assignee indicators — stacked initials + team icon */}
+      {/* Assignee indicators */}
       {!isShort && hasAssignment && (
         <div className="absolute bottom-0.5 right-1 flex items-center">
           {visibleInitials.map((item, idx) => (
