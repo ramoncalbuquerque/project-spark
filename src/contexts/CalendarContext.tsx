@@ -13,13 +13,19 @@ interface CalendarContextType {
   goPrev: () => void;
 }
 
-const CalendarContext = createContext<CalendarContextType | null>(null);
-
-export const useCalendar = () => {
-  const ctx = useContext(CalendarContext);
-  if (!ctx) throw new Error("useCalendar must be inside CalendarProvider");
-  return ctx;
+const defaultValue: CalendarContextType = {
+  selectedDate: new Date(),
+  viewMode: "week",
+  setSelectedDate: () => {},
+  setViewMode: () => {},
+  goToToday: () => {},
+  goNext: () => {},
+  goPrev: () => {},
 };
+
+const CalendarContext = createContext<CalendarContextType>(defaultValue);
+
+export const useCalendar = () => useContext(CalendarContext);
 
 export const CalendarProvider = ({ children }: { children: ReactNode }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
