@@ -71,6 +71,7 @@ const CardFormModal = () => {
 
   const [title, setTitle] = useState("");
   const [cardType, setCardType] = useState("task");
+  const [status, setStatus] = useState("pending");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [allDay, setAllDay] = useState(false);
@@ -81,6 +82,21 @@ const CardFormModal = () => {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Members can only set in_progress or completed on their assigned cards
+  const isMember = profile?.role === "member";
+  const isAssignedMember = isMember && editingCard?.assignees?.some((a) => a.id === user?.id);
+
+  const STATUSES = [
+    { value: "pending", label: "⚪ Pendente", memberAllowed: false },
+    { value: "in_progress", label: "🔵 Em andamento", memberAllowed: true },
+    { value: "completed", label: "🟢 Concluído", memberAllowed: true },
+    { value: "overdue", label: "🔴 Atrasado", memberAllowed: false },
+  ];
+
+  const availableStatuses = isAssignedMember
+    ? STATUSES.filter((s) => s.memberAllowed)
+    : STATUSES;
 
   const myTeams = useMemo(
     () => teams.filter((t) => t.created_by === user?.id),
