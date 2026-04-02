@@ -102,9 +102,9 @@ const CalendarCard = ({
         </>
       )}
       {/* Assignee indicator */}
-      {!isShort && (card.assigned_to_profile || card.assigned_to_team) && (
+      {!isShort && (card.assignees?.length > 0 || card.teams?.length > 0) && (
         <div className="absolute bottom-0.5 right-1">
-          {card.assigned_to_team ? (
+          {card.teams?.length > 0 ? (
             <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center">
               <Users className="h-2.5 w-2.5 text-white" />
             </div>
