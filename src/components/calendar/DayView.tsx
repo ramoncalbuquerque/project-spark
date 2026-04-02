@@ -72,7 +72,7 @@ const DayView = () => {
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
 
-  const { drag } = useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
+  // drag extracted from useDragSelect above
 
   useEffect(() => {
     if (scrollRef.current) {
