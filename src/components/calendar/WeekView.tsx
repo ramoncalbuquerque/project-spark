@@ -151,7 +151,7 @@ const WeekView = () => {
   }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
-    (card: Tables<"cards">) => {
+    (card: CardWithAssignees) => {
       const start = parseISO(card.start_date);
       // Find which day column this card belongs to
       const matchingDay = days.find(

@@ -20,7 +20,7 @@ import type { Tables } from "@/integrations/supabase/types";
 const WEEK_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MAX_VISIBLE = 3;
 
-function getCardsForDay(cards: Tables<"cards">[], day: Date) {
+function getCardsForDay(cards: CardWithAssignees[], day: Date) {
   return cards.filter((c) => isSameDay(parseISO(c.start_date), day));
 }
 

@@ -119,7 +119,7 @@ const DayView = () => {
   }, [onSelectUp]);
 
   const handleCardLongPress = useCallback(
-    (card: Tables<"cards">) => {
+    (card: CardWithAssignees) => {
       const start = parseISO(card.start_date);
       startLongPress(card, selectedDate, start.getHours());
     },
