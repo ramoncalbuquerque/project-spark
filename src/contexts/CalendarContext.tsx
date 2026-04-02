@@ -3,9 +3,12 @@ import { addDays, addWeeks, subWeeks, addMonths, subMonths } from "date-fns";
 
 type ViewMode = "day" | "week" | "month";
 
-interface CalendarFilters {
+export interface CalendarFilters {
   profileId: string | null;
   teamId: string | null;
+  status: string | null;
+  cardType: string | null;
+  priority: string | null;
 }
 
 interface CalendarContextType {
@@ -21,7 +24,13 @@ interface CalendarContextType {
   goPrev: () => void;
 }
 
-const defaultFilters: CalendarFilters = { profileId: null, teamId: null };
+const defaultFilters: CalendarFilters = {
+  profileId: null,
+  teamId: null,
+  status: null,
+  cardType: null,
+  priority: null,
+};
 
 const defaultValue: CalendarContextType = {
   selectedDate: new Date(),

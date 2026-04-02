@@ -71,6 +71,7 @@ const CardFormModal = () => {
 
   const [title, setTitle] = useState("");
   const [cardType, setCardType] = useState("task");
+  const [status, setStatus] = useState("pending");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [allDay, setAllDay] = useState(false);
@@ -81,6 +82,21 @@ const CardFormModal = () => {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Members can only set in_progress or completed on their assigned cards
+  const isMember = profile?.role === "member";
+  const isAssignedMember = isMember && editingCard?.assignees?.some((a) => a.id === user?.id);
+
+  const STATUSES = [
+    { value: "pending", label: "⚪ Pendente", memberAllowed: false },
+    { value: "in_progress", label: "🔵 Em andamento", memberAllowed: true },
+    { value: "completed", label: "🟢 Concluído", memberAllowed: true },
+    { value: "overdue", label: "🔴 Atrasado", memberAllowed: false },
+  ];
+
+  const availableStatuses = isAssignedMember
+    ? STATUSES.filter((s) => s.memberAllowed)
+    : STATUSES;
 
   const myTeams = useMemo(
     () => teams.filter((t) => t.created_by === user?.id),
@@ -110,6 +126,7 @@ const CardFormModal = () => {
       setStartDate(toLocalDatetime(new Date(editingCard.start_date)));
       setEndDate(editingCard.end_date ? toLocalDatetime(new Date(editingCard.end_date)) : "");
       setAllDay(editingCard.all_day);
+      setStatus(editingCard.status);
       setPriority(editingCard.priority);
       setDescription(editingCard.description || "");
       setSelectedProfileIds(editingCard.assignees?.map((a) => a.id) ?? []);
@@ -121,6 +138,7 @@ const CardFormModal = () => {
       setStartDate(defaultDate ? toLocalDatetime(defaultDate) : toLocalDatetime(new Date()));
       setEndDate(defaultEndDate ? toLocalDatetime(defaultEndDate) : "");
       setAllDay(false);
+      setStatus("pending");
       setPriority("medium");
       setDescription("");
       setAssignTab("person");
@@ -157,6 +175,7 @@ const CardFormModal = () => {
       const payload = {
         title: title.trim(),
         card_type: cardType,
+        status,
         start_date: new Date(startDate).toISOString(),
         end_date: endDate ? new Date(endDate).toISOString() : null,
         all_day: allDay,
@@ -251,6 +270,29 @@ const CardFormModal = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Status — shown in edit mode or for leaders */}
+          {(editingCard || isLeader) && (
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select
+                value={status}
+                onValueChange={setStatus}
+                disabled={isMember && !isAssignedMember}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStatuses.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* All day */}
           <div className="flex items-center gap-2">
