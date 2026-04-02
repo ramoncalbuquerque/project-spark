@@ -43,7 +43,7 @@ function toLocalDatetime(d: Date) {
 }
 
 const CardFormModal = () => {
-  const { isModalOpen, editingCard, defaultDate, closeModal } = useCardModal();
+  const { isModalOpen, editingCard, defaultDate, defaultEndDate, closeModal } = useCardModal();
   const { createCard, updateCard, deleteCard } = useCards();
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -76,13 +76,13 @@ const CardFormModal = () => {
       setTitle("");
       setCardType("task");
       setStartDate(defaultDate ? toLocalDatetime(defaultDate) : toLocalDatetime(new Date()));
-      setEndDate("");
+      setEndDate(defaultEndDate ? toLocalDatetime(defaultEndDate) : "");
       setAllDay(false);
       setPriority("medium");
       setDescription("");
     }
     setConfirmDelete(false);
-  }, [isModalOpen, editingCard, defaultDate]);
+  }, [isModalOpen, editingCard, defaultDate, defaultEndDate]);
 
   const handleSave = async () => {
     if (!title.trim() || !startDate || !user) return;

@@ -7,7 +7,8 @@ interface CardContextType {
   isModalOpen: boolean;
   editingCard: Card | null;
   defaultDate: Date | null;
-  openCreateModal: (date?: Date) => void;
+  defaultEndDate: Date | null;
+  openCreateModal: (date?: Date, endDate?: Date) => void;
   openEditModal: (card: Card) => void;
   closeModal: () => void;
 }
@@ -16,6 +17,7 @@ const CardContext = createContext<CardContextType>({
   isModalOpen: false,
   editingCard: null,
   defaultDate: null,
+  defaultEndDate: null,
   openCreateModal: () => {},
   openEditModal: () => {},
   closeModal: () => {},
@@ -27,16 +29,19 @@ export const CardProvider = ({ children }: { children: ReactNode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [defaultDate, setDefaultDate] = useState<Date | null>(null);
+  const [defaultEndDate, setDefaultEndDate] = useState<Date | null>(null);
 
-  const openCreateModal = (date?: Date) => {
+  const openCreateModal = (date?: Date, endDate?: Date) => {
     setEditingCard(null);
     setDefaultDate(date ?? null);
+    setDefaultEndDate(endDate ?? null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (card: Card) => {
     setEditingCard(card);
     setDefaultDate(null);
+    setDefaultEndDate(null);
     setIsModalOpen(true);
   };
 
@@ -44,11 +49,12 @@ export const CardProvider = ({ children }: { children: ReactNode }) => {
     setIsModalOpen(false);
     setEditingCard(null);
     setDefaultDate(null);
+    setDefaultEndDate(null);
   };
 
   return (
     <CardContext.Provider
-      value={{ isModalOpen, editingCard, defaultDate, openCreateModal, openEditModal, closeModal }}
+      value={{ isModalOpen, editingCard, defaultDate, defaultEndDate, openCreateModal, openEditModal, closeModal }}
     >
       {children}
     </CardContext.Provider>
