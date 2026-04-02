@@ -278,6 +278,14 @@ export type Database = {
         Returns: boolean
       }
       get_user_role: { Args: { _user_id: string }; Returns: string }
+      is_team_creator: {
+        Args: { p_team_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_team_member: {
+        Args: { p_team_id: string; p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
