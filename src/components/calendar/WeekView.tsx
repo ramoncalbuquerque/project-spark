@@ -253,6 +253,7 @@ const WeekView = () => {
                       onMouseEnter={() => handleSlotMouseEnter(day, hour)}
                       onTouchStart={() => handleSlotMouseDown(day, hour)}
                       data-hour={hour}
+                      data-day={day.toISOString()}
                     />
                   );
                 })}
