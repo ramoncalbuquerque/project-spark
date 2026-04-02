@@ -271,7 +271,7 @@ const WeekView = () => {
                 {positioned.map((pc) => (
                   <div
                     key={pc.card.id}
-                    className="absolute z-[5] px-0.5"
+                    className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
                     style={{
                       top: pc.top,
                       height: pc.height,
