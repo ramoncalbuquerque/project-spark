@@ -396,6 +396,20 @@ const CardFormModal = () => {
               rows={3}
             />
           </div>
+
+          {/* Agenda Items — only in edit mode */}
+          {editingCard && (
+            <div className="border-t border-border pt-3">
+              <AgendaSection cardId={editingCard.id} isLeader={!!isLeader} />
+            </div>
+          )}
+
+          {/* Attachments — only in edit mode */}
+          {editingCard && (
+            <div className="border-t border-border pt-3">
+              <AttachmentsSection cardId={editingCard.id} cardCreatedBy={editingCard.created_by} />
+            </div>
+          )}
         </div>
 
         {/* Actions */}
