@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import MiniCalendar from "@/components/MiniCalendar";
+import { useCardModal } from "@/contexts/CardContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { title: "Calendário", url: "/dashboard", icon: Calendar },
@@ -22,17 +24,28 @@ const navItems = [
 
 export function AppSidebar() {
   const { setOpenMobile } = useSidebar();
+  const { openCreateModal } = useCardModal();
+  const { profile } = useAuth();
+  const isLeader = profile?.role === "leader";
 
   return (
     <Sidebar className="border-r border-border bg-card">
       <SidebarContent className="pt-2">
-        {/* Create button */}
-        <div className="px-3 pb-2">
-          <Button className="w-full gap-2 h-10 text-sm font-semibold" disabled>
-            <Plus className="h-4 w-4" />
-            Criar
-          </Button>
-        </div>
+        {/* Create button — only for leaders */}
+        {isLeader && (
+          <div className="px-3 pb-2">
+            <Button
+              className="w-full gap-2 h-10 text-sm font-semibold"
+              onClick={() => {
+                openCreateModal();
+                setOpenMobile(false);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Criar
+            </Button>
+          </div>
+        )}
 
         <Separator />
 
