@@ -4,6 +4,8 @@ import { useCards } from "@/hooks/useCards";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAllProfiles, useTeams } from "@/hooks/useTeams";
+import AgendaSection from "./AgendaSection";
+import AttachmentsSection from "./AttachmentsSection";
 import {
   Dialog,
   DialogContent,
@@ -61,7 +63,8 @@ const AssignChip = ({ label, onRemove }: { label: string; onRemove: () => void }
 const CardFormModal = () => {
   const { isModalOpen, editingCard, defaultDate, defaultEndDate, closeModal } = useCardModal();
   const { createCard, updateCard, deleteCard } = useCards();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isLeader = profile?.role === "leader";
   const isMobile = useIsMobile();
   const allProfiles = useAllProfiles();
   const { teams } = useTeams();
@@ -204,7 +207,7 @@ const CardFormModal = () => {
         className={
           isMobile
             ? "fixed inset-0 max-w-none w-full h-full rounded-none translate-x-0 translate-y-0 left-0 top-0 flex flex-col"
-            : "max-w-lg"
+            : "max-w-lg max-h-[90vh] flex flex-col"
         }
       >
         <DialogHeader>
@@ -218,7 +221,7 @@ const CardFormModal = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className={`space-y-4 ${isMobile ? "flex-1 overflow-y-auto" : ""}`}>
+        <div className={`space-y-4 ${isMobile ? "flex-1 overflow-y-auto" : "flex-1 overflow-y-auto"}`}>
           {/* Title */}
           <div className="space-y-1">
             <Label htmlFor="card-title">Título *</Label>
@@ -393,6 +396,20 @@ const CardFormModal = () => {
               rows={3}
             />
           </div>
+
+          {/* Agenda Items — only in edit mode */}
+          {editingCard && (
+            <div className="border-t border-border pt-3">
+              <AgendaSection cardId={editingCard.id} isLeader={!!isLeader} />
+            </div>
+          )}
+
+          {/* Attachments — only in edit mode */}
+          {editingCard && (
+            <div className="border-t border-border pt-3">
+              <AttachmentsSection cardId={editingCard.id} cardCreatedBy={editingCard.created_by} />
+            </div>
+          )}
         </div>
 
         {/* Actions */}
