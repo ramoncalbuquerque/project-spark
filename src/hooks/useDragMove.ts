@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { parseISO, differenceInMinutes, addMinutes, setHours, setMinutes } from "date-fns";
+import { flushSync } from "react-dom";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Card = Tables<"cards">;
@@ -28,7 +29,6 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
 
-  // Keep ref in sync with state for use in document listeners
   useEffect(() => {
     dragMoveRef.current = dragMove;
   }, [dragMove]);
@@ -58,10 +58,11 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
           currentHour: hour,
           durationMinutes,
         };
-        setDragMove(state);
+        flushSync(() => {
+          setDragMove(state);
+        });
         dragMoveRef.current = state;
 
-        // Register document-level listeners for tracking movement
         const onDocMove = (e: PointerEvent) => {
           const el = document.elementFromPoint(e.clientX, e.clientY);
           const slot = el?.closest("[data-hour]") as HTMLElement | null;
@@ -72,7 +73,9 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
             if (prev && (prev.currentDay.getTime() !== newDay.getTime() || prev.currentHour !== newHour)) {
               const updated = { ...prev, currentDay: newDay, currentHour: newHour };
               dragMoveRef.current = updated;
-              setDragMove(updated);
+              flushSync(() => {
+                setDragMove(updated);
+              });
             }
           }
         };
@@ -84,7 +87,9 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
           const dm = dragMoveRef.current;
           if (!isDraggingMove.current || !dm) {
             isDraggingMove.current = false;
-            setDragMove(null);
+            flushSync(() => {
+              setDragMove(null);
+            });
             return;
           }
           isDraggingMove.current = false;
@@ -93,7 +98,9 @@ export function useDragMove({ enabled, onMove }: UseDragMoveOptions) {
           const hasEnd = !!dm.card.end_date;
           const newEnd = hasEnd ? addMinutes(newStart, dm.durationMinutes) : null;
 
-          setDragMove(null);
+          flushSync(() => {
+            setDragMove(null);
+          });
           dragMoveRef.current = null;
           onMoveRef.current(dm.card, newStart, newEnd);
         };
