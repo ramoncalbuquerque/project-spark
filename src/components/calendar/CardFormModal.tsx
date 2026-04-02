@@ -82,7 +82,7 @@ const CardFormModal = () => {
       setDescription("");
     }
     setConfirmDelete(false);
-  }, [isModalOpen, editingCard, defaultDate]);
+  }, [isModalOpen, editingCard, defaultDate, defaultEndDate]);
 
   const handleSave = async () => {
     if (!title.trim() || !startDate || !user) return;
