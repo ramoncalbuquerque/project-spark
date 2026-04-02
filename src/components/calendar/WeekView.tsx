@@ -1,34 +1,37 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import CalendarCard, { OverflowBadge } from "./CalendarCard";
+import { useDragSelect } from "@/hooks/useDragSelect";
+import CalendarCard from "./CalendarCard";
+import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
 import {
   startOfWeek,
   addDays,
   format,
   isToday,
-  isSameDay,
-  setHours,
-  setMinutes,
-  parseISO,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Tables } from "@/integrations/supabase/types";
 
-const START_HOUR = 6;
-const END_HOUR = 22;
-const SLOT_HEIGHT = 60;
-const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 const HOUR_COL_W = "w-12 min-w-[3rem]";
 const DAY_COL_W = "min-w-[44px]";
-const MAX_VISIBLE_CARDS = 3;
 
 const SHORT_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 const NowLine = () => {
+  const [top, setTop] = __import_useState(0);
+  const [visible, setVisible] = __import_useState(false);
+
+  // fix: use React hooks properly
+  return null;
+};
+
+// Inline NowLine with proper imports
+import { useState } from "react";
+
+const NowLineComponent = () => {
   const [top, setTop] = useState(0);
   const [visible, setVisible] = useState(false);
 
@@ -37,7 +40,7 @@ const NowLine = () => {
       const now = new Date();
       const h = now.getHours();
       const m = now.getMinutes();
-      if (h >= START_HOUR && h < END_HOUR) {
+      if (h >= START_HOUR && h < 22) {
         setTop((h - START_HOUR) * SLOT_HEIGHT + (m / 60) * SLOT_HEIGHT);
         setVisible(true);
       } else {
@@ -61,13 +64,6 @@ const NowLine = () => {
   );
 };
 
-function getCardsForSlot(cards: Tables<"cards">[], day: Date, hour: number) {
-  return cards.filter((c) => {
-    const d = parseISO(c.start_date);
-    return isSameDay(d, day) && d.getHours() === hour && !c.all_day;
-  });
-}
-
 const WeekView = () => {
   const { selectedDate } = useCalendar();
   const { cards } = useCards();
@@ -78,6 +74,22 @@ const WeekView = () => {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const isLeader = profile?.role === "leader";
+
+  const handleDragSelect = useCallback(
+    (startDate: Date, endDate: Date) => {
+      if (startDate.getTime() === endDate.getTime()) {
+        openCreateModal(startDate);
+      } else {
+        openCreateModal(startDate, endDate);
+      }
+    },
+    [openCreateModal]
+  );
+
+  const { isSlotSelected, onPointerDown, onPointerMove, onPointerUp } = useDragSelect({
+    enabled: isLeader,
+    onSelect: handleDragSelect,
+  });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -90,14 +102,13 @@ const WeekView = () => {
     return format(day, "EEEE", { locale: ptBR });
   };
 
-  const handleSlotClick = (day: Date, hour: number) => {
-    if (!isLeader) return;
-    const d = setMinutes(setHours(new Date(day), hour), 0);
-    openCreateModal(d);
-  };
-
   return (
-    <div className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card">
+    <div
+      className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card"
+      onMouseUp={onPointerUp}
+      onTouchEnd={onPointerUp}
+      onMouseLeave={onPointerUp}
+    >
       {/* Header */}
       <div className="flex shrink-0 border-b border-border overflow-hidden">
         <div className={`${HOUR_COL_W} shrink-0`} />
@@ -144,6 +155,8 @@ const WeekView = () => {
           {/* Day columns */}
           {days.map((day, colIdx) => {
             const today = isToday(day);
+            const positioned = positionCards(cards, day);
+
             return (
               <div
                 key={colIdx}
@@ -151,32 +164,53 @@ const WeekView = () => {
                   today ? "bg-primary/5" : ""
                 }`}
               >
+                {/* Slot grid lines + drag targets */}
                 {HOURS.map((hour, rowIdx) => {
-                  const slotCards = getCardsForSlot(cards, day, hour);
-                  const visible = slotCards.slice(0, MAX_VISIBLE_CARDS);
-                  const overflow = slotCards.length - MAX_VISIBLE_CARDS;
-
+                  const selected = isSlotSelected(day, hour);
                   return (
                     <div
                       key={rowIdx}
                       className={`border-b border-border/50 ${
                         rowIdx % 2 === 0 ? "bg-muted/20" : ""
-                      } ${isLeader ? "cursor-pointer hover:bg-accent/30" : ""}`}
+                      } ${isLeader ? "cursor-crosshair" : ""} ${
+                        selected
+                          ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
+                          : ""
+                      } transition-colors duration-100`}
                       style={{ height: SLOT_HEIGHT }}
-                      onClick={() => handleSlotClick(day, hour)}
-                    >
-                      <div className="flex flex-col gap-0.5 p-0.5 overflow-hidden h-full">
-                        {visible.map((card) => (
-                          <CalendarCard key={card.id} card={card} compact={isMobile} />
-                        ))}
-                        {overflow > 0 && (
-                          <OverflowBadge count={overflow} onClick={() => {}} />
-                        )}
-                      </div>
-                    </div>
+                      onMouseDown={() => onPointerDown(day, hour)}
+                      onMouseEnter={() => onPointerMove(day, hour)}
+                      onTouchStart={() => onPointerDown(day, hour)}
+                      onTouchMove={(e) => {
+                        const touch = e.touches[0];
+                        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                        if (el) {
+                          const slotHour = el.getAttribute("data-hour");
+                          if (slotHour) onPointerMove(day, parseInt(slotHour));
+                        }
+                      }}
+                      data-hour={hour}
+                    />
                   );
                 })}
-                {today && <NowLine />}
+
+                {/* Absolutely positioned cards */}
+                {positioned.map((pc) => (
+                  <div
+                    key={pc.card.id}
+                    className="absolute z-[5] px-0.5"
+                    style={{
+                      top: pc.top,
+                      height: pc.height,
+                      left: pc.left,
+                      width: pc.width,
+                    }}
+                  >
+                    <CalendarCard card={pc.card} compact={isMobile} height={pc.height} />
+                  </div>
+                ))}
+
+                {today && <NowLineComponent />}
               </div>
             );
           })}
