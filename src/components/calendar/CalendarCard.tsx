@@ -24,6 +24,8 @@ const PRIORITY_BADGES: Record<string, { label: string; className: string }> = {
   urgent: { label: "Urgente", className: "bg-red-400/40 text-red-100" },
 };
 
+const MAX_VISIBLE_INITIALS = 3;
+
 interface CalendarCardProps {
   card: Card;
   compact?: boolean;
@@ -48,12 +50,18 @@ const CalendarCard = ({
   const isShort = height !== undefined && height < 30;
   const pointerDownTime = useRef(0);
 
-  const assigneeName = useMemo(() => {
-    if (!card.assignees?.length) return null;
-    return card.assignees[0]?.full_name || null;
-  }, [card.assignees]);
+  const assignees = card.assignees ?? [];
+  const teams = card.teams ?? [];
+  const hasAssignment = assignees.length > 0 || teams.length > 0;
 
-  const assigneeInitial = assigneeName ? assigneeName[0]?.toUpperCase() : null;
+  const visibleInitials = useMemo(() => {
+    return assignees.slice(0, MAX_VISIBLE_INITIALS).map((a) => ({
+      id: a.id,
+      initial: a.full_name?.[0]?.toUpperCase() || "?",
+    }));
+  }, [assignees]);
+
+  const overflowCount = Math.max(0, assignees.length - MAX_VISIBLE_INITIALS);
 
   const handlePointerDown = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
@@ -76,9 +84,7 @@ const CalendarCard = ({
     [card, isDragging, openEditModal, onLongPressCancel]
   );
 
-  const handlePointerLeave = useCallback(() => {
-    // Don't cancel on leave — only cancel on short click (pointerUp)
-  }, []);
+  const handlePointerLeave = useCallback(() => {}, []);
 
   return (
     <button
@@ -101,18 +107,26 @@ const CalendarCard = ({
           </span>
         </>
       )}
-      {/* Assignee indicator */}
-      {!isShort && (card.assignees?.length > 0 || card.teams?.length > 0) && (
-        <div className="absolute bottom-0.5 right-1">
-          {card.teams?.length > 0 ? (
-            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center">
+      {/* Assignee indicators — stacked initials + team icon */}
+      {!isShort && hasAssignment && (
+        <div className="absolute bottom-0.5 right-1 flex items-center">
+          {visibleInitials.map((item, idx) => (
+            <div
+              key={item.id}
+              className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white border border-white/30"
+              style={{ marginLeft: idx > 0 ? -4 : 0, zIndex: MAX_VISIBLE_INITIALS - idx }}
+            >
+              {item.initial}
+            </div>
+          ))}
+          {overflowCount > 0 && (
+            <span className="text-[7px] text-white/70 font-semibold ml-0.5">+{overflowCount}</span>
+          )}
+          {teams.length > 0 && (
+            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center ml-0.5">
               <Users className="h-2.5 w-2.5 text-white" />
             </div>
-          ) : assigneeInitial ? (
-            <div className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white">
-              {assigneeInitial}
-            </div>
-          ) : null}
+          )}
         </div>
       )}
     </button>
