@@ -54,11 +54,13 @@ const DayView = () => {
 
   // Drag-to-move
   const handleMove = useCallback(
-    (card: Tables<"cards">, newStart: Date, newEnd: Date | null) => {
+    (card: CardWithAssignees, newStart: Date, newEnd: Date | null) => {
       updateCard.mutate({
         id: card.id,
-        start_date: newStart.toISOString(),
-        end_date: newEnd ? newEnd.toISOString() : card.end_date,
+        updates: {
+          start_date: newStart.toISOString(),
+          end_date: newEnd ? newEnd.toISOString() : card.end_date,
+        },
       });
     },
     [updateCard]
