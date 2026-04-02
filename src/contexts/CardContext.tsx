@@ -17,6 +17,7 @@ const CardContext = createContext<CardContextType>({
   isModalOpen: false,
   editingCard: null,
   defaultDate: null,
+  defaultEndDate: null,
   openCreateModal: () => {},
   openEditModal: () => {},
   closeModal: () => {},
