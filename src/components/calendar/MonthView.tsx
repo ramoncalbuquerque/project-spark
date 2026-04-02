@@ -15,12 +15,12 @@ import {
   isSameDay,
   parseISO,
 } from "date-fns";
-import type { Tables } from "@/integrations/supabase/types";
+import type { EnrichedCard } from "@/hooks/useCards";
 
 const WEEK_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MAX_VISIBLE = 3;
 
-function getCardsForDay(cards: Tables<"cards">[], day: Date) {
+function getCardsForDay(cards: EnrichedCard[], day: Date) {
   return cards.filter((c) => isSameDay(parseISO(c.start_date), day));
 }
 
