@@ -94,11 +94,81 @@ export type Database = {
           },
         ]
       }
+      card_assignees: {
+        Row: {
+          assigned_at: string
+          card_id: string
+          id: string
+          profile_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          card_id: string
+          id?: string
+          profile_id: string
+        }
+        Update: {
+          assigned_at?: string
+          card_id?: string
+          id?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_assignees_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_assignees_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_teams: {
+        Row: {
+          assigned_at: string
+          card_id: string
+          id: string
+          team_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          card_id: string
+          id?: string
+          team_id: string
+        }
+        Update: {
+          assigned_at?: string
+          card_id?: string
+          id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_teams_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cards: {
         Row: {
           all_day: boolean
-          assigned_to_profile: string | null
-          assigned_to_team: string | null
           card_type: string
           created_at: string
           created_by: string
@@ -113,8 +183,6 @@ export type Database = {
         }
         Insert: {
           all_day?: boolean
-          assigned_to_profile?: string | null
-          assigned_to_team?: string | null
           card_type: string
           created_at?: string
           created_by: string
@@ -129,8 +197,6 @@ export type Database = {
         }
         Update: {
           all_day?: boolean
-          assigned_to_profile?: string | null
-          assigned_to_team?: string | null
           card_type?: string
           created_at?: string
           created_by?: string
@@ -144,20 +210,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "cards_assigned_to_profile_fkey"
-            columns: ["assigned_to_profile"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cards_assigned_to_team_fkey"
-            columns: ["assigned_to_team"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "cards_created_by_fkey"
             columns: ["created_by"]
@@ -278,6 +330,14 @@ export type Database = {
         Returns: boolean
       }
       get_user_role: { Args: { _user_id: string }; Returns: string }
+      is_card_assignee: {
+        Args: { p_card_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_card_team_member: {
+        Args: { p_card_id: string; p_user_id: string }
+        Returns: boolean
+      }
       is_team_creator: {
         Args: { p_team_id: string; p_user_id: string }
         Returns: boolean
