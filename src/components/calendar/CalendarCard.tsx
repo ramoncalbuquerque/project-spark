@@ -42,7 +42,6 @@ const CalendarCard = ({
   onLongPressCancel,
 }: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
-  const allProfiles = useAllProfiles();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
   const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
@@ -50,10 +49,9 @@ const CalendarCard = ({
   const pointerDownTime = useRef(0);
 
   const assigneeName = useMemo(() => {
-    if (!card.assigned_to_profile) return null;
-    const p = allProfiles.find((pr) => pr.id === card.assigned_to_profile);
-    return p?.full_name || null;
-  }, [card.assigned_to_profile, allProfiles]);
+    if (!card.assignees?.length) return null;
+    return card.assignees[0]?.full_name || null;
+  }, [card.assignees]);
 
   const assigneeInitial = assigneeName ? assigneeName[0]?.toUpperCase() : null;
 
