@@ -110,6 +110,9 @@ export function useCards() {
           .in("card_id", cardIds),
       ]);
 
+      if (assigneesRes.error) console.warn("card_assignees query error:", assigneesRes.error);
+      if (teamsRes.error) console.warn("card_teams query error:", teamsRes.error);
+
       const assigneeMap = new Map<string, AssigneeInfo[]>();
       for (const row of assigneesRes.data ?? []) {
         const p = row.profiles as unknown as AssigneeInfo | null;

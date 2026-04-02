@@ -49,7 +49,7 @@ const DayView = () => {
     [openCreateModal]
   );
 
-  const { isSlotSelected, onPointerDown: onSelectDown, onPointerMove: onSelectMove, onPointerUp: onSelectUp } =
+  const { drag, isSlotSelected, onPointerDown: onSelectDown, onPointerMove: onSelectMove, onPointerUp: onSelectUp } =
     useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
 
   // Drag-to-move
@@ -72,7 +72,7 @@ const DayView = () => {
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
 
-  const { drag } = useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
+  // drag extracted from useDragSelect above
 
   useEffect(() => {
     if (scrollRef.current) {
