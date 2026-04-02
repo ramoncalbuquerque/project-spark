@@ -29,16 +29,19 @@ export const CardProvider = ({ children }: { children: ReactNode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
   const [defaultDate, setDefaultDate] = useState<Date | null>(null);
+  const [defaultEndDate, setDefaultEndDate] = useState<Date | null>(null);
 
-  const openCreateModal = (date?: Date) => {
+  const openCreateModal = (date?: Date, endDate?: Date) => {
     setEditingCard(null);
     setDefaultDate(date ?? null);
+    setDefaultEndDate(endDate ?? null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (card: Card) => {
     setEditingCard(card);
     setDefaultDate(null);
+    setDefaultEndDate(null);
     setIsModalOpen(true);
   };
 
@@ -46,6 +49,7 @@ export const CardProvider = ({ children }: { children: ReactNode }) => {
     setIsModalOpen(false);
     setEditingCard(null);
     setDefaultDate(null);
+    setDefaultEndDate(null);
   };
 
   return (
