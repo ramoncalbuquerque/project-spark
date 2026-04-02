@@ -221,7 +221,7 @@ const CardFormModal = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className={`space-y-4 ${isMobile ? "flex-1 overflow-y-auto" : ""}`}>
+        <div className={`space-y-4 ${isMobile ? "flex-1 overflow-y-auto" : "flex-1 overflow-y-auto"}`}>
           {/* Title */}
           <div className="space-y-1">
             <Label htmlFor="card-title">Título *</Label>
