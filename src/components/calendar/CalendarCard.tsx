@@ -19,12 +19,14 @@ const PRIORITY_BADGES: Record<string, { label: string; className: string }> = {
 interface CalendarCardProps {
   card: Card;
   compact?: boolean;
+  height?: number;
 }
 
-const CalendarCard = ({ card, compact = false }: CalendarCardProps) => {
+const CalendarCard = ({ card, compact = false, height }: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
+  const isShort = height !== undefined && height < 30;
 
   return (
     <button
@@ -32,11 +34,11 @@ const CalendarCard = ({ card, compact = false }: CalendarCardProps) => {
         e.stopPropagation();
         openEditModal(card);
       }}
-      className={`w-full text-left rounded px-1.5 py-0.5 text-white text-[11px] leading-tight border-l-2 truncate cursor-pointer hover:brightness-110 transition-all ${color}`}
+      className={`w-full h-full text-left rounded px-1.5 py-0.5 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:brightness-110 transition-all overflow-hidden ${color}`}
       title={card.title}
     >
-      <span className="truncate font-medium">{card.title}</span>
-      {!compact && (
+      <span className="truncate font-medium block">{card.title}</span>
+      {!compact && !isShort && (
         <span className={`ml-1 text-[9px] px-1 rounded ${badge.className}`}>
           {badge.label}
         </span>

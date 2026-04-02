@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
@@ -17,21 +17,9 @@ import { ptBR } from "date-fns/locale";
 
 const HOUR_COL_W = "w-12 min-w-[3rem]";
 const DAY_COL_W = "min-w-[44px]";
-
 const SHORT_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 const NowLine = () => {
-  const [top, setTop] = __import_useState(0);
-  const [visible, setVisible] = __import_useState(false);
-
-  // fix: use React hooks properly
-  return null;
-};
-
-// Inline NowLine with proper imports
-import { useState } from "react";
-
-const NowLineComponent = () => {
   const [top, setTop] = useState(0);
   const [visible, setVisible] = useState(false);
 
@@ -77,11 +65,7 @@ const WeekView = () => {
 
   const handleDragSelect = useCallback(
     (startDate: Date, endDate: Date) => {
-      if (startDate.getTime() === endDate.getTime()) {
-        openCreateModal(startDate);
-      } else {
-        openCreateModal(startDate, endDate);
-      }
+      openCreateModal(startDate, endDate);
     },
     [openCreateModal]
   );
@@ -104,7 +88,7 @@ const WeekView = () => {
 
   return (
     <div
-      className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card"
+      className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card select-none"
       onMouseUp={onPointerUp}
       onTouchEnd={onPointerUp}
       onMouseLeave={onPointerUp}
@@ -164,7 +148,6 @@ const WeekView = () => {
                   today ? "bg-primary/5" : ""
                 }`}
               >
-                {/* Slot grid lines + drag targets */}
                 {HOURS.map((hour, rowIdx) => {
                   const selected = isSlotSelected(day, hour);
                   return (
@@ -181,14 +164,6 @@ const WeekView = () => {
                       onMouseDown={() => onPointerDown(day, hour)}
                       onMouseEnter={() => onPointerMove(day, hour)}
                       onTouchStart={() => onPointerDown(day, hour)}
-                      onTouchMove={(e) => {
-                        const touch = e.touches[0];
-                        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                        if (el) {
-                          const slotHour = el.getAttribute("data-hour");
-                          if (slotHour) onPointerMove(day, parseInt(slotHour));
-                        }
-                      }}
                       data-hour={hour}
                     />
                   );
@@ -210,7 +185,7 @@ const WeekView = () => {
                   </div>
                 ))}
 
-                {today && <NowLineComponent />}
+                {today && <NowLine />}
               </div>
             );
           })}

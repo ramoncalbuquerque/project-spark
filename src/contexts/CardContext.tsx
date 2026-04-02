@@ -54,7 +54,7 @@ export const CardProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <CardContext.Provider
-      value={{ isModalOpen, editingCard, defaultDate, openCreateModal, openEditModal, closeModal }}
+      value={{ isModalOpen, editingCard, defaultDate, defaultEndDate, openCreateModal, openEditModal, closeModal }}
     >
       {children}
     </CardContext.Provider>
