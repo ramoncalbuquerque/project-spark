@@ -7,7 +7,8 @@ interface CardContextType {
   isModalOpen: boolean;
   editingCard: Card | null;
   defaultDate: Date | null;
-  openCreateModal: (date?: Date) => void;
+  defaultEndDate: Date | null;
+  openCreateModal: (date?: Date, endDate?: Date) => void;
   openEditModal: (card: Card) => void;
   closeModal: () => void;
 }
