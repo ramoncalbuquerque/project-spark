@@ -4,14 +4,35 @@ import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDragSelect } from "@/hooks/useDragSelect";
+import { useDragMove } from "@/hooks/useDragMove";
 import CalendarCard from "./CalendarCard";
 import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
-import { format, isToday } from "date-fns";
+import { format, isToday, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { Tables } from "@/integrations/supabase/types";
+
+/** Ghost preview of where the card will be dropped */
+const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; durationMinutes: number; cardType: string }) => {
+  const top = (hour - START_HOUR) * SLOT_HEIGHT;
+  const height = Math.max(16, (durationMinutes / 60) * SLOT_HEIGHT);
+  const colors: Record<string, string> = {
+    task: "bg-[#1E88E5]/30 border-[#1565C0]",
+    meeting: "bg-[#2E7D32]/30 border-[#1B5E20]",
+    project: "bg-[#7B1FA2]/30 border-[#6A1B9A]",
+  };
+  const color = colors[cardType] || colors.task;
+
+  return (
+    <div
+      className={`absolute left-0 right-0 z-[4] rounded-[6px] border-2 border-dashed ${color} pointer-events-none`}
+      style={{ top, height }}
+    />
+  );
+};
 
 const DayView = () => {
   const { selectedDate } = useCalendar();
-  const { cards } = useCards();
+  const { cards, updateCard } = useCards();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -20,6 +41,7 @@ const DayView = () => {
 
   const [nowTop, setNowTop] = useState<number | null>(null);
 
+  // Drag-to-select
   const handleDragSelect = useCallback(
     (startDate: Date, endDate: Date) => {
       openCreateModal(startDate, endDate);
@@ -27,10 +49,30 @@ const DayView = () => {
     [openCreateModal]
   );
 
-  const { isSlotSelected, onPointerDown, onPointerMove, onPointerUp } = useDragSelect({
-    enabled: isLeader,
-    onSelect: handleDragSelect,
-  });
+  const { isSlotSelected, onPointerDown: onSelectDown, onPointerMove: onSelectMove, onPointerUp: onSelectUp } =
+    useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
+
+  // Drag-to-move
+  const handleMove = useCallback(
+    (card: Tables<"cards">, newStart: Date, newEnd: Date | null) => {
+      updateCard.mutate({
+        id: card.id,
+        start_date: newStart.toISOString(),
+        end_date: newEnd ? newEnd.toISOString() : card.end_date,
+      });
+    },
+    [updateCard]
+  );
+
+  const {
+    dragMove,
+    startLongPress,
+    cancelLongPress,
+    onMovePointerMove,
+    onMovePointerUp,
+    isCardBeingDragged,
+    getDropSlot,
+  } = useDragMove({ enabled: isLeader, onMove: handleMove });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -55,14 +97,48 @@ const DayView = () => {
     return () => clearInterval(id);
   }, [today]);
 
+  const handleSlotMouseDown = useCallback(
+    (hour: number) => {
+      if (dragMove) return;
+      onSelectDown(selectedDate, hour);
+    },
+    [dragMove, onSelectDown, selectedDate]
+  );
+
+  const handleSlotMouseEnter = useCallback(
+    (hour: number) => {
+      onSelectMove(selectedDate, hour);
+      onMovePointerMove(selectedDate, hour);
+    },
+    [onSelectMove, onMovePointerMove, selectedDate]
+  );
+
+  const handleGlobalUp = useCallback(() => {
+    if (dragMove) {
+      onMovePointerUp();
+    } else {
+      onSelectUp();
+    }
+  }, [dragMove, onMovePointerUp, onSelectUp]);
+
+  const handleCardLongPress = useCallback(
+    (card: Tables<"cards">) => {
+      const start = parseISO(card.start_date);
+      startLongPress(card, selectedDate, start.getHours());
+    },
+    [selectedDate, startLongPress]
+  );
+
   const positioned = positionCards(cards, selectedDate);
+  const dropSlot = getDropSlot();
+  const showDropGhost = dropSlot && dropSlot.day.getTime() === selectedDate.getTime();
 
   return (
     <div
       className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card select-none"
-      onMouseUp={onPointerUp}
-      onTouchEnd={onPointerUp}
-      onMouseLeave={onPointerUp}
+      onMouseUp={handleGlobalUp}
+      onTouchEnd={handleGlobalUp}
+      onMouseLeave={handleGlobalUp}
     >
       {/* Header */}
       <div className="flex border-b border-border shrink-0">
@@ -95,24 +171,34 @@ const DayView = () => {
           <div className={`flex-1 border-l border-border relative ${today ? "bg-primary/5" : ""}`}>
             {HOURS.map((hour, rowIdx) => {
               const selected = isSlotSelected(selectedDate, hour);
+              const isDropTarget = showDropGhost && hour === dropSlot!.hour;
               return (
                 <div
                   key={rowIdx}
                   className={`border-b border-border/50 ${rowIdx % 2 === 0 ? "bg-muted/20" : ""} ${
-                    isLeader ? "cursor-crosshair" : ""
-                  } ${
+                    isLeader && !dragMove ? "cursor-crosshair" : ""
+                  } ${isLeader && dragMove ? "cursor-grabbing" : ""} ${
                     selected
                       ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
                       : ""
-                  } transition-colors duration-100`}
+                  } ${isDropTarget ? "!bg-[rgba(27,94,32,0.1)]" : ""} transition-colors duration-100`}
                   style={{ height: SLOT_HEIGHT }}
-                  onMouseDown={() => onPointerDown(selectedDate, hour)}
-                  onMouseEnter={() => onPointerMove(selectedDate, hour)}
-                  onTouchStart={() => onPointerDown(selectedDate, hour)}
+                  onMouseDown={() => handleSlotMouseDown(hour)}
+                  onMouseEnter={() => handleSlotMouseEnter(hour)}
+                  onTouchStart={() => handleSlotMouseDown(hour)}
                   data-hour={hour}
                 />
               );
             })}
+
+            {/* Drop ghost preview */}
+            {showDropGhost && dropSlot && (
+              <DropGhost
+                hour={dropSlot.hour}
+                durationMinutes={dropSlot.durationMinutes}
+                cardType={dragMove!.card.card_type}
+              />
+            )}
 
             {/* Absolutely positioned cards */}
             {positioned.map((pc) => (
@@ -126,7 +212,13 @@ const DayView = () => {
                   width: pc.width,
                 }}
               >
-                <CalendarCard card={pc.card} height={pc.height} />
+                <CalendarCard
+                  card={pc.card}
+                  height={pc.height}
+                  isDragging={isCardBeingDragged(pc.card.id)}
+                  onLongPressStart={isLeader ? handleCardLongPress : undefined}
+                  onLongPressCancel={cancelLongPress}
+                />
               </div>
             ))}
 

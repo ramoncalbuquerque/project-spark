@@ -1,3 +1,4 @@
+import { useRef, useCallback } from "react";
 import type { Tables } from "@/integrations/supabase/types";
 import { useCardModal } from "@/contexts/CardContext";
 
@@ -26,22 +27,65 @@ interface CalendarCardProps {
   card: Card;
   compact?: boolean;
   height?: number;
+  isDragging?: boolean;
+  onLongPressStart?: (card: Card) => void;
+  onLongPressCancel?: () => void;
 }
 
-const CalendarCard = ({ card, compact = false, height }: CalendarCardProps) => {
+const CalendarCard = ({
+  card,
+  compact = false,
+  height,
+  isDragging = false,
+  onLongPressStart,
+  onLongPressCancel,
+}: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
   const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
   const isShort = height !== undefined && height < 30;
+  const pointerDownTime = useRef(0);
+
+  const handlePointerDown = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.stopPropagation();
+      pointerDownTime.current = Date.now();
+      onLongPressStart?.(card);
+    },
+    [card, onLongPressStart]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.stopPropagation();
+      onLongPressCancel?.();
+      const elapsed = Date.now() - pointerDownTime.current;
+      // Short click → open edit modal (only if not dragging)
+      if (elapsed < 400 && !isDragging) {
+        openEditModal(card);
+      }
+    },
+    [card, isDragging, openEditModal, onLongPressCancel]
+  );
+
+  const handlePointerLeave = useCallback(() => {
+    // Don't cancel if we're already in drag mode
+    if (!isDragging) {
+      onLongPressCancel?.();
+    }
+  }, [isDragging, onLongPressCancel]);
 
   return (
     <button
-      onClick={(e) => {
-        e.stopPropagation();
-        openEditModal(card);
-      }}
-      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start ${color}`}
+      onMouseDown={handlePointerDown}
+      onTouchStart={handlePointerDown}
+      onMouseUp={handlePointerUp}
+      onTouchEnd={handlePointerUp}
+      onMouseLeave={handlePointerLeave}
+      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start ${color} ${
+        isDragging ? "opacity-30" : ""
+      }`}
       title={card.title}
     >
       <span className="truncate font-bold block w-full">{card.title}</span>

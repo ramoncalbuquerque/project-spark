@@ -5,6 +5,7 @@ import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDragSelect } from "@/hooks/useDragSelect";
+import { useDragMove } from "@/hooks/useDragMove";
 import CalendarCard from "./CalendarCard";
 import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
 import {
@@ -12,8 +13,10 @@ import {
   addDays,
   format,
   isToday,
+  parseISO,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { Tables } from "@/integrations/supabase/types";
 
 const HOUR_COL_W = "w-12 min-w-[3rem]";
 const DAY_COL_W = "min-w-[44px]";
@@ -52,9 +55,28 @@ const NowLine = () => {
   );
 };
 
+/** Ghost preview of where the card will be dropped */
+const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; durationMinutes: number; cardType: string }) => {
+  const top = (hour - START_HOUR) * SLOT_HEIGHT;
+  const height = Math.max(16, (durationMinutes / 60) * SLOT_HEIGHT);
+  const colors: Record<string, string> = {
+    task: "bg-[#1E88E5]/30 border-[#1565C0]",
+    meeting: "bg-[#2E7D32]/30 border-[#1B5E20]",
+    project: "bg-[#7B1FA2]/30 border-[#6A1B9A]",
+  };
+  const color = colors[cardType] || colors.task;
+
+  return (
+    <div
+      className={`absolute left-0 right-0 z-[4] rounded-[6px] border-2 border-dashed ${color} pointer-events-none`}
+      style={{ top, height }}
+    />
+  );
+};
+
 const WeekView = () => {
   const { selectedDate } = useCalendar();
-  const { cards } = useCards();
+  const { cards, updateCard } = useCards();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -63,6 +85,7 @@ const WeekView = () => {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const isLeader = profile?.role === "leader";
 
+  // Drag-to-select (create)
   const handleDragSelect = useCallback(
     (startDate: Date, endDate: Date) => {
       openCreateModal(startDate, endDate);
@@ -70,10 +93,30 @@ const WeekView = () => {
     [openCreateModal]
   );
 
-  const { isSlotSelected, onPointerDown, onPointerMove, onPointerUp } = useDragSelect({
-    enabled: isLeader,
-    onSelect: handleDragSelect,
-  });
+  const { isSlotSelected, onPointerDown: onSelectDown, onPointerMove: onSelectMove, onPointerUp: onSelectUp } =
+    useDragSelect({ enabled: isLeader, onSelect: handleDragSelect });
+
+  // Drag-to-move
+  const handleMove = useCallback(
+    (card: Tables<"cards">, newStart: Date, newEnd: Date | null) => {
+      updateCard.mutate({
+        id: card.id,
+        start_date: newStart.toISOString(),
+        end_date: newEnd ? newEnd.toISOString() : card.end_date,
+      });
+    },
+    [updateCard]
+  );
+
+  const {
+    dragMove,
+    startLongPress,
+    cancelLongPress,
+    onMovePointerMove,
+    onMovePointerUp,
+    isCardBeingDragged,
+    getDropSlot,
+  } = useDragMove({ enabled: isLeader, onMove: handleMove });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -86,12 +129,52 @@ const WeekView = () => {
     return format(day, "EEEE", { locale: ptBR });
   };
 
+  const handleSlotMouseDown = useCallback(
+    (day: Date, hour: number) => {
+      if (dragMove) return; // Don't start select while moving
+      onSelectDown(day, hour);
+    },
+    [dragMove, onSelectDown]
+  );
+
+  const handleSlotMouseEnter = useCallback(
+    (day: Date, hour: number) => {
+      onSelectMove(day, hour);
+      onMovePointerMove(day, hour);
+    },
+    [onSelectMove, onMovePointerMove]
+  );
+
+  const handleGlobalUp = useCallback(() => {
+    if (dragMove) {
+      onMovePointerUp();
+    } else {
+      onSelectUp();
+    }
+  }, [dragMove, onMovePointerUp, onSelectUp]);
+
+  const handleCardLongPress = useCallback(
+    (card: Tables<"cards">) => {
+      const start = parseISO(card.start_date);
+      // Find which day column this card belongs to
+      const matchingDay = days.find(
+        (d) => d.getFullYear() === start.getFullYear() && d.getMonth() === start.getMonth() && d.getDate() === start.getDate()
+      );
+      if (matchingDay) {
+        startLongPress(card, matchingDay, start.getHours());
+      }
+    },
+    [days, startLongPress]
+  );
+
+  const dropSlot = getDropSlot();
+
   return (
     <div
       className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card select-none"
-      onMouseUp={onPointerUp}
-      onTouchEnd={onPointerUp}
-      onMouseLeave={onPointerUp}
+      onMouseUp={handleGlobalUp}
+      onTouchEnd={handleGlobalUp}
+      onMouseLeave={handleGlobalUp}
     >
       {/* Header */}
       <div className="flex shrink-0 border-b border-border overflow-hidden">
@@ -140,6 +223,8 @@ const WeekView = () => {
           {days.map((day, colIdx) => {
             const today = isToday(day);
             const positioned = positionCards(cards, day);
+            const showDropGhost =
+              dropSlot && dropSlot.day.getTime() === day.getTime();
 
             return (
               <div
@@ -150,24 +235,41 @@ const WeekView = () => {
               >
                 {HOURS.map((hour, rowIdx) => {
                   const selected = isSlotSelected(day, hour);
+                  const isDropTarget =
+                    showDropGhost && hour === dropSlot!.hour;
                   return (
                     <div
                       key={rowIdx}
                       className={`border-b border-border/50 ${
                         rowIdx % 2 === 0 ? "bg-muted/20" : ""
-                      } ${isLeader ? "cursor-crosshair" : ""} ${
+                      } ${isLeader && !dragMove ? "cursor-crosshair" : ""} ${
+                        isLeader && dragMove ? "cursor-grabbing" : ""
+                      } ${
                         selected
                           ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
                           : ""
+                      } ${
+                        isDropTarget
+                          ? "!bg-[rgba(27,94,32,0.1)]"
+                          : ""
                       } transition-colors duration-100`}
                       style={{ height: SLOT_HEIGHT }}
-                      onMouseDown={() => onPointerDown(day, hour)}
-                      onMouseEnter={() => onPointerMove(day, hour)}
-                      onTouchStart={() => onPointerDown(day, hour)}
+                      onMouseDown={() => handleSlotMouseDown(day, hour)}
+                      onMouseEnter={() => handleSlotMouseEnter(day, hour)}
+                      onTouchStart={() => handleSlotMouseDown(day, hour)}
                       data-hour={hour}
                     />
                   );
                 })}
+
+                {/* Drop ghost preview */}
+                {showDropGhost && dropSlot && (
+                  <DropGhost
+                    hour={dropSlot.hour}
+                    durationMinutes={dropSlot.durationMinutes}
+                    cardType={dragMove!.card.card_type}
+                  />
+                )}
 
                 {/* Absolutely positioned cards */}
                 {positioned.map((pc) => (
@@ -181,7 +283,14 @@ const WeekView = () => {
                       width: pc.width,
                     }}
                   >
-                    <CalendarCard card={pc.card} compact={isMobile} height={pc.height} />
+                    <CalendarCard
+                      card={pc.card}
+                      compact={isMobile}
+                      height={pc.height}
+                      isDragging={isCardBeingDragged(pc.card.id)}
+                      onLongPressStart={isLeader ? handleCardLongPress : undefined}
+                      onLongPressCancel={cancelLongPress}
+                    />
                   </div>
                 ))}
 
