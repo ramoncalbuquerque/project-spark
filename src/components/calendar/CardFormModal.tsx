@@ -4,6 +4,8 @@ import { useCards } from "@/hooks/useCards";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAllProfiles, useTeams } from "@/hooks/useTeams";
+import AgendaSection from "./AgendaSection";
+import AttachmentsSection from "./AttachmentsSection";
 import {
   Dialog,
   DialogContent,
