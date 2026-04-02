@@ -24,8 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Trash2, X } from "lucide-react";
+import type { CardWithAssignees } from "@/hooks/useCards";
 
 const CARD_TYPES = [
   { value: "task", label: "📋 Tarefa" },
@@ -60,39 +62,34 @@ const CardFormModal = () => {
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
   const [assignTab, setAssignTab] = useState<"person" | "team">("person");
-  const [assignedProfile, setAssignedProfile] = useState<string>("");
-  const [assignedTeam, setAssignedTeam] = useState<string>("");
+  const [selectedProfiles, setSelectedProfiles] = useState<string[]>([]);
+  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Only show teams created by the current user (leader)
   const myTeams = useMemo(
     () => teams.filter((t) => t.created_by === user?.id),
     [teams, user?.id]
   );
+
+  const editingCardWithAssignees = editingCard as CardWithAssignees | null;
 
   useEffect(() => {
     if (!isModalOpen) {
       setConfirmDelete(false);
       return;
     }
-    if (editingCard) {
-      setTitle(editingCard.title);
-      setCardType(editingCard.card_type);
-      setStartDate(toLocalDatetime(new Date(editingCard.start_date)));
-      setEndDate(editingCard.end_date ? toLocalDatetime(new Date(editingCard.end_date)) : "");
-      setAllDay(editingCard.all_day);
-      setPriority(editingCard.priority);
-      setDescription(editingCard.description || "");
-      if (editingCard.assigned_to_team) {
-        setAssignTab("team");
-        setAssignedTeam(editingCard.assigned_to_team);
-        setAssignedProfile("");
-      } else {
-        setAssignTab("person");
-        setAssignedProfile(editingCard.assigned_to_profile || "");
-        setAssignedTeam("");
-      }
+    if (editingCardWithAssignees) {
+      setTitle(editingCardWithAssignees.title);
+      setCardType(editingCardWithAssignees.card_type);
+      setStartDate(toLocalDatetime(new Date(editingCardWithAssignees.start_date)));
+      setEndDate(editingCardWithAssignees.end_date ? toLocalDatetime(new Date(editingCardWithAssignees.end_date)) : "");
+      setAllDay(editingCardWithAssignees.all_day);
+      setPriority(editingCardWithAssignees.priority);
+      setDescription(editingCardWithAssignees.description || "");
+      setSelectedProfiles(editingCardWithAssignees.assignees?.map((a) => a.profile_id) || []);
+      setSelectedTeams(editingCardWithAssignees.teams?.map((t) => t.team_id) || []);
+      setAssignTab(editingCardWithAssignees.teams?.length ? "team" : "person");
     } else {
       setTitle("");
       setCardType("task");
@@ -102,11 +99,11 @@ const CardFormModal = () => {
       setPriority("medium");
       setDescription("");
       setAssignTab("person");
-      setAssignedProfile("");
-      setAssignedTeam("");
+      setSelectedProfiles([]);
+      setSelectedTeams([]);
     }
     setConfirmDelete(false);
-  }, [isModalOpen, editingCard, defaultDate, defaultEndDate]);
+  }, [isModalOpen, editingCardWithAssignees, defaultDate, defaultEndDate]);
 
   const handleSave = async () => {
     if (!title.trim() || !startDate || !user) return;
@@ -120,13 +117,20 @@ const CardFormModal = () => {
         all_day: allDay,
         priority,
         description: description.trim() || null,
-        assigned_to_profile: assignTab === "person" && assignedProfile ? assignedProfile : null,
-        assigned_to_team: assignTab === "team" && assignedTeam ? assignedTeam : null,
       };
-      if (editingCard) {
-        await updateCard.mutateAsync({ id: editingCard.id, ...payload });
+      if (editingCardWithAssignees) {
+        await updateCard.mutateAsync({
+          id: editingCardWithAssignees.id,
+          updates: payload,
+          assigneeIds: selectedProfiles,
+          teamIds: selectedTeams,
+        });
       } else {
-        await createCard.mutateAsync({ ...payload, created_by: user.id });
+        await createCard.mutateAsync({
+          card: { ...payload, created_by: user.id },
+          assigneeIds: selectedProfiles,
+          teamIds: selectedTeams,
+        });
       }
       closeModal();
     } finally {
@@ -135,19 +139,42 @@ const CardFormModal = () => {
   };
 
   const handleDelete = async () => {
-    if (!editingCard) return;
+    if (!editingCardWithAssignees) return;
     if (!confirmDelete) {
       setConfirmDelete(true);
       return;
     }
     setSaving(true);
     try {
-      await deleteCard.mutateAsync(editingCard.id);
+      await deleteCard.mutateAsync(editingCardWithAssignees.id);
       closeModal();
     } finally {
       setSaving(false);
     }
   };
+
+  const addProfile = (id: string) => {
+    if (id && !selectedProfiles.includes(id)) {
+      setSelectedProfiles([...selectedProfiles, id]);
+    }
+  };
+
+  const removeProfile = (id: string) => {
+    setSelectedProfiles(selectedProfiles.filter((p) => p !== id));
+  };
+
+  const addTeam = (id: string) => {
+    if (id && !selectedTeams.includes(id)) {
+      setSelectedTeams([...selectedTeams, id]);
+    }
+  };
+
+  const removeTeam = (id: string) => {
+    setSelectedTeams(selectedTeams.filter((t) => t !== id));
+  };
+
+  const availableProfiles = allProfiles.filter((p) => !selectedProfiles.includes(p.id));
+  const availableTeams = myTeams.filter((t) => !selectedTeams.includes(t.id));
 
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
@@ -253,79 +280,89 @@ const CardFormModal = () => {
             </Select>
           </div>
 
-          {/* Assignment */}
+          {/* Assignment - Multi-select */}
           <div className="space-y-2">
             <Label>Atribuir a</Label>
             <Tabs
               value={assignTab}
-              onValueChange={(v) => {
-                setAssignTab(v as "person" | "team");
-                if (v === "person") setAssignedTeam("");
-                else setAssignedProfile("");
-              }}
+              onValueChange={(v) => setAssignTab(v as "person" | "team")}
             >
               <TabsList className="w-full">
-                <TabsTrigger value="person" className="flex-1">Pessoa</TabsTrigger>
-                <TabsTrigger value="team" className="flex-1">Time</TabsTrigger>
+                <TabsTrigger value="person" className="flex-1">
+                  Pessoas {selectedProfiles.length > 0 && `(${selectedProfiles.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="team" className="flex-1">
+                  Times {selectedTeams.length > 0 && `(${selectedTeams.length})`}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 
             {assignTab === "person" ? (
-              <div className="flex items-center gap-2">
-                <Select
-                  value={assignedProfile || "none"}
-                  onValueChange={(v) => setAssignedProfile(v === "none" ? "" : v)}
-                >
-                  <SelectTrigger className="h-11 flex-1">
-                    <SelectValue placeholder="Ninguém" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Ninguém</SelectItem>
-                    {allProfiles.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.full_name || "Sem nome"} ({p.role})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {assignedProfile && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => setAssignedProfile("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+              <div className="space-y-2">
+                {/* Selected chips */}
+                {selectedProfiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedProfiles.map((pid) => {
+                      const p = allProfiles.find((pr) => pr.id === pid);
+                      return (
+                        <Badge key={pid} variant="secondary" className="gap-1 text-xs">
+                          {p?.full_name || "Sem nome"}
+                          <button onClick={() => removeProfile(pid)} className="ml-0.5 hover:text-destructive">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Add dropdown */}
+                {availableProfiles.length > 0 && (
+                  <Select value="" onValueChange={addProfile}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Adicionar pessoa..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableProfiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.full_name || "Sem nome"} ({p.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <Select
-                  value={assignedTeam || "none"}
-                  onValueChange={(v) => setAssignedTeam(v === "none" ? "" : v)}
-                >
-                  <SelectTrigger className="h-11 flex-1">
-                    <SelectValue placeholder="Nenhum" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {myTeams.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {assignedTeam && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => setAssignedTeam("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+              <div className="space-y-2">
+                {/* Selected chips */}
+                {selectedTeams.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedTeams.map((tid) => {
+                      const t = myTeams.find((tm) => tm.id === tid);
+                      return (
+                        <Badge key={tid} variant="secondary" className="gap-1 text-xs">
+                          {t?.name || "Time"}
+                          <button onClick={() => removeTeam(tid)} className="ml-0.5 hover:text-destructive">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Add dropdown */}
+                {availableTeams.length > 0 && (
+                  <Select value="" onValueChange={addTeam}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Adicionar time..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTeams.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </div>
             )}
