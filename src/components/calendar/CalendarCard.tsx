@@ -110,26 +110,15 @@ const CalendarCard = ({
       {/* Assignee indicators — stacked initials + team icon */}
       {!isShort && hasAssignment && (
         <div className="absolute bottom-0.5 right-1 flex items-center">
-          {/* Stacked initials */}
-          {visibleInitials.length > 0 && (
-            <div className="flex items-center" style={{ marginRight: overflowCount > 0 || teams.length > 0 ? 2 : 0 }}>
-              {visibleInitials.map((item, idx) => (
-                <div
-                  key={item.id}
-                  className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white border border-white/30"
-                  style={{ marginLeft: idx > 0 ? -4 : 0, zIndex: MAX_VISIBLE_INITIALS - idx }}
-                />
-              ))}
-              {/* Render initials on top of circles */}
-              {visibleInitials.map((item, idx) => (
-                <div
-                  key={`i-${item.id}`}
-                  className="absolute h-4 w-4 flex items-center justify-center text-[8px] font-bold text-white pointer-events-none"
-                  style={{ right: `${(visibleInitials.length - 1 - idx) * 12 + (overflowCount > 0 || teams.length > 0 ? 2 : 0) + (teams.length > 0 ? 18 : 0) + (overflowCount > 0 ? 16 : 0)}px` }}
-                />
-              ))}
+          {visibleInitials.map((item, idx) => (
+            <div
+              key={item.id}
+              className="h-4 w-4 rounded-full bg-white/25 flex items-center justify-center text-[8px] font-bold text-white border border-white/30"
+              style={{ marginLeft: idx > 0 ? -4 : 0, zIndex: MAX_VISIBLE_INITIALS - idx }}
+            >
+              {item.initial}
             </div>
-          )}
+          ))}
           {overflowCount > 0 && (
             <span className="text-[7px] text-white/70 font-semibold ml-0.5">+{overflowCount}</span>
           )}
