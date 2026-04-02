@@ -43,7 +43,7 @@ function toLocalDatetime(d: Date) {
 }
 
 const CardFormModal = () => {
-  const { isModalOpen, editingCard, defaultDate, closeModal } = useCardModal();
+  const { isModalOpen, editingCard, defaultDate, defaultEndDate, closeModal } = useCardModal();
   const { createCard, updateCard, deleteCard } = useCards();
   const { user } = useAuth();
   const isMobile = useIsMobile();
