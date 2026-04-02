@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
+import { useCards } from "@/hooks/useCards";
+import { useCardModal } from "@/contexts/CardContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import CalendarCard, { OverflowBadge } from "./CalendarCard";
 import {
   startOfWeek,
   addDays,
   format,
   isToday,
+  isSameDay,
+  setHours,
+  setMinutes,
+  parseISO,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { Tables } from "@/integrations/supabase/types";
 
 const START_HOUR = 6;
 const END_HOUR = 22;
@@ -15,6 +24,7 @@ const SLOT_HEIGHT = 60;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 const HOUR_COL_W = "w-12 min-w-[3rem]";
 const DAY_COL_W = "min-w-[44px]";
+const MAX_VISIBLE_CARDS = 3;
 
 const SHORT_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -42,10 +52,7 @@ const NowLine = () => {
   if (!visible) return null;
 
   return (
-    <div
-      className="absolute left-0 right-0 z-10 pointer-events-none"
-      style={{ top }}
-    >
+    <div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top }}>
       <div className="relative w-full">
         <div className="absolute left-0 w-2 h-2 rounded-full bg-destructive -translate-y-1/2" />
         <div className="absolute left-0 right-0 h-[2px] bg-destructive" />
@@ -54,12 +61,23 @@ const NowLine = () => {
   );
 };
 
+function getCardsForSlot(cards: Tables<"cards">[], day: Date, hour: number) {
+  return cards.filter((c) => {
+    const d = parseISO(c.start_date);
+    return isSameDay(d, day) && d.getHours() === hour && !c.all_day;
+  });
+}
+
 const WeekView = () => {
   const { selectedDate } = useCalendar();
+  const { cards } = useCards();
+  const { openCreateModal } = useCardModal();
+  const { profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const isLeader = profile?.role === "leader";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -72,9 +90,15 @@ const WeekView = () => {
     return format(day, "EEEE", { locale: ptBR });
   };
 
+  const handleSlotClick = (day: Date, hour: number) => {
+    if (!isLeader) return;
+    const d = setMinutes(setHours(new Date(day), hour), 0);
+    openCreateModal(d);
+  };
+
   return (
     <div className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card">
-      {/* Header — uses same column structure as grid */}
+      {/* Header */}
       <div className="flex shrink-0 border-b border-border overflow-hidden">
         <div className={`${HOUR_COL_W} shrink-0`} />
         {days.map((day, i) => {
@@ -127,15 +151,31 @@ const WeekView = () => {
                   today ? "bg-primary/5" : ""
                 }`}
               >
-                {HOURS.map((_, rowIdx) => (
-                  <div
-                    key={rowIdx}
-                    className={`border-b border-border/50 ${
-                      rowIdx % 2 === 0 ? "bg-muted/20" : ""
-                    }`}
-                    style={{ height: SLOT_HEIGHT }}
-                  />
-                ))}
+                {HOURS.map((hour, rowIdx) => {
+                  const slotCards = getCardsForSlot(cards, day, hour);
+                  const visible = slotCards.slice(0, MAX_VISIBLE_CARDS);
+                  const overflow = slotCards.length - MAX_VISIBLE_CARDS;
+
+                  return (
+                    <div
+                      key={rowIdx}
+                      className={`border-b border-border/50 ${
+                        rowIdx % 2 === 0 ? "bg-muted/20" : ""
+                      } ${isLeader ? "cursor-pointer hover:bg-accent/30" : ""}`}
+                      style={{ height: SLOT_HEIGHT }}
+                      onClick={() => handleSlotClick(day, hour)}
+                    >
+                      <div className="flex flex-col gap-0.5 p-0.5 overflow-hidden h-full">
+                        {visible.map((card) => (
+                          <CalendarCard key={card.id} card={card} compact={isMobile} />
+                        ))}
+                        {overflow > 0 && (
+                          <OverflowBadge count={overflow} onClick={() => {}} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {today && <NowLine />}
               </div>
             );

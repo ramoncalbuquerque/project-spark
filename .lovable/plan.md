@@ -1,29 +1,44 @@
-## Plano: Grade do Calendário — /dashboard
+# Plano: Sistema Completo de Cards
 
-### Arquitetura
+## Arquitetura
 
-**Novo contexto**: `CalendarContext` — estado compartilhado entre Dashboard e MiniCalendar
-- `selectedDate`, `viewMode` ('day'|'week'|'month', default 'week')
-- Funções: `goToToday()`, `goNext()`, `goPrev()`, `setSelectedDate()`, `setViewMode()`
+### Novo contexto: CardContext
+- Estado: `isModalOpen`, `editingCard`, `defaultDate`
+- Funções: `openCreateModal(date?)`, `openEditModal(card)`, `closeModal()`
+- Provider no AppLayout (junto com CalendarProvider)
 
-### Componentes novos
+### Hook: useCards
+- `useQuery` para buscar cards do período visível (baseado em selectedDate + viewMode)
+- `useMutation` para create, update, delete
+- Filtragem por data no frontend (RLS cuida da segurança)
+
+### Componentes
 
 | Componente | Responsabilidade |
 |------------|-----------------|
-| `CalendarContext` | Estado global do calendário |
-| `CalendarToolbar` | Setas ◀▶, label período, botão "Hoje", abas Dia/Semana/Mês |
-| `WeekView` | Grade 7 colunas × 16 slots (06-22h), zebrado, dia atual verde, linha "agora" vermelha |
-| `DayView` | Coluna única, mesmos slots, linha "agora" |
-| `MonthView` | Grade 5×7, dias fora do mês cinza, dia atual verde |
+| `CardContext` | Estado do modal e card em edição |
+| `CardFormModal` | Modal fullscreen mobile, campos do card, salvar/cancelar/excluir |
+| `CalendarCard` | Bloco visual colorido (azul/verde/roxo) com título + badge prioridade |
 
-### Detalhes
+### Fluxo
+1. Leader clica "+ Criar" ou slot vazio → `openCreateModal(date?)`
+2. Modal abre com campos (data pré-preenchida se veio de slot)
+3. Salvar → mutation insert → invalidate query → modal fecha
+4. Clique em card existente → `openEditModal(card)` → modal com dados
+5. Editar → mutation update | Excluir → confirmação → mutation delete
 
-- **WeekView**: header com horas (w-16) + 7 cols flex-1. Slots h-[60px], zebrado. Coluna dia atual bg-primary/5. Linha "agora" absolute, atualiza cada 60s. Scroll inicial ~08:00.
-- **Navegação**: Semana ±7d, Dia ±1d, Mês ±1 mês. Labels dinâmicos.
-- **MiniCalendar**: onClick chama setSelectedDate, destaque no dia selecionado.
-- **CalendarProvider** no AppLayout.
+### Cores por tipo
+- Tarefa: #1E88E5 (azul)
+- Reunião: #2E7D32 (verde)  
+- Projeto: #7B1FA2 (roxo)
+
+### Prioridade badges
+- Baixa: cinza | Média: amarelo | Alta: laranja | Urgente: vermelho
+
+### Permissões
+- Leader: CRUD completo, vê botão Criar, clique em slot funciona
+- Member: só visualiza, sem botão Criar, clique em slot não faz nada
 
 ### Arquivos
-- Novos: CalendarContext, CalendarToolbar, WeekView, DayView, MonthView
-- Alterados: MiniCalendar, AppLayout, Dashboard
-- Sem tocar: sidebar, header, rotas, auth
+- Novos: CardContext, useCards, CardFormModal, CalendarCard
+- Alterados: AppSidebar (botão Criar), WeekView, DayView, MonthView, Dashboard, AppLayout
