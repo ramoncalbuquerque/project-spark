@@ -120,12 +120,14 @@ export function positionCards(cards: Card[], day: Date): PositionedCard[] {
   for (const group of groups) {
     const maxCol = Math.max(...group.map((g) => g.col)) + 1;
     for (const { item, col } of group) {
+      // Add 1px gap on each side between overlapping cards
+      const gapPx = maxCol > 1 ? 1 : 0;
       result.push({
         card: item.card,
         top: item.top,
         height: item.height,
-        left: `${(col / maxCol) * 100}%`,
-        width: `${(1 / maxCol) * 100}%`,
+        left: `calc(${(col / maxCol) * 100}% + ${gapPx}px)`,
+        width: `calc(${(1 / maxCol) * 100}% - ${gapPx * 2}px)`,
       });
     }
   }
