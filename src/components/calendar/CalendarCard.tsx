@@ -48,7 +48,7 @@ const CalendarCard = ({
   const pointerDownTime = useRef(0);
 
   const handlePointerDown = useCallback(
-    (e: React.PointerEvent | React.TouchEvent) => {
+    (e: React.MouseEvent | React.TouchEvent) => {
       e.stopPropagation();
       pointerDownTime.current = Date.now();
       onLongPressStart?.(card);
