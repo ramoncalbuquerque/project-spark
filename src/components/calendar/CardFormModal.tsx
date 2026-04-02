@@ -126,6 +126,7 @@ const CardFormModal = () => {
       setStartDate(toLocalDatetime(new Date(editingCard.start_date)));
       setEndDate(editingCard.end_date ? toLocalDatetime(new Date(editingCard.end_date)) : "");
       setAllDay(editingCard.all_day);
+      setStatus(editingCard.status);
       setPriority(editingCard.priority);
       setDescription(editingCard.description || "");
       setSelectedProfileIds(editingCard.assignees?.map((a) => a.id) ?? []);
