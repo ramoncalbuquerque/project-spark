@@ -76,7 +76,7 @@ const CardFormModal = () => {
       setTitle("");
       setCardType("task");
       setStartDate(defaultDate ? toLocalDatetime(defaultDate) : toLocalDatetime(new Date()));
-      setEndDate("");
+      setEndDate(defaultEndDate ? toLocalDatetime(defaultEndDate) : "");
       setAllDay(false);
       setPriority("medium");
       setDescription("");
