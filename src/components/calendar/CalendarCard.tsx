@@ -9,6 +9,12 @@ const TYPE_COLORS: Record<string, string> = {
   project: "bg-[#7B1FA2] border-[#6A1B9A]",
 };
 
+const TYPE_LABELS: Record<string, string> = {
+  task: "Tarefa",
+  meeting: "Reunião",
+  project: "Projeto",
+};
+
 const PRIORITY_BADGES: Record<string, { label: string; className: string }> = {
   low: { label: "Baixa", className: "bg-white/20 text-white/80" },
   medium: { label: "Média", className: "bg-yellow-300/30 text-yellow-100" },
@@ -26,6 +32,7 @@ const CalendarCard = ({ card, compact = false, height }: CalendarCardProps) => {
   const { openEditModal } = useCardModal();
   const color = TYPE_COLORS[card.card_type] || TYPE_COLORS.task;
   const badge = PRIORITY_BADGES[card.priority] || PRIORITY_BADGES.medium;
+  const typeLabel = TYPE_LABELS[card.card_type] || TYPE_LABELS.task;
   const isShort = height !== undefined && height < 30;
 
   return (
@@ -34,14 +41,17 @@ const CalendarCard = ({ card, compact = false, height }: CalendarCardProps) => {
         e.stopPropagation();
         openEditModal(card);
       }}
-      className={`w-full h-full text-left rounded px-1.5 py-0.5 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:brightness-110 transition-all overflow-hidden ${color}`}
+      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight border-l-2 cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start ${color}`}
       title={card.title}
     >
-      <span className="truncate font-medium block">{card.title}</span>
-      {!compact && !isShort && (
-        <span className={`ml-1 text-[9px] px-1 rounded ${badge.className}`}>
-          {badge.label}
-        </span>
+      <span className="truncate font-bold block w-full">{card.title}</span>
+      {!isShort && !compact && (
+        <>
+          <span className="truncate block w-full text-[10px] text-white/80">{typeLabel}</span>
+          <span className={`text-[9px] px-1 rounded mt-0.5 inline-block ${badge.className}`}>
+            {badge.label}
+          </span>
+        </>
       )}
     </button>
   );
