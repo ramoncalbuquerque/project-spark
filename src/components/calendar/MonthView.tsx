@@ -31,6 +31,7 @@ const MonthView = () => {
   const { cards } = useCards();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
+  const isMobile = useIsMobile();
   const isLeader = profile?.role === "leader";
 
   const monthStart = startOfMonth(selectedDate);
@@ -40,12 +41,13 @@ const MonthView = () => {
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
   const handleDayClick = (day: Date) => {
-    if (isLeader) {
-      openCreateModal(day);
-    } else {
-      setSelectedDate(day);
-      setViewMode("day");
-    }
+    setSelectedDate(day);
+    setViewMode("day");
+  };
+
+  const handleCreateClick = (e: React.MouseEvent, day: Date) => {
+    e.stopPropagation();
+    openCreateModal(day);
   };
 
   return (
