@@ -26,8 +26,6 @@ import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useAllProfiles, useTeams } from "@/hooks/useTeams";
-import { useCards } from "@/hooks/useCards";
-import { isCardOverdue } from "@/components/calendar/CalendarCard";
 
 const navItems = [
   { title: "Calendário", url: "/dashboard", icon: Calendar },
