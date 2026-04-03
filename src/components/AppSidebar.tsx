@@ -228,9 +228,7 @@ export function AppSidebar() {
               </p>
             ) : (
               <SidebarMenu>
-                {teams.map((team) => {
-                  const pendingCount = pendingByTeam.get(team.id) ?? 0;
-                  return (
+              {teams.map((team) => (
                     <SidebarMenuItem key={team.id}>
                       <SidebarMenuButton
                         onClick={() => {
@@ -243,20 +241,12 @@ export function AppSidebar() {
                       >
                         <Users className="mr-2 h-3.5 w-3.5" />
                         <span className="truncate">{team.name}</span>
-                        <span className="ml-auto flex items-center gap-1">
-                          {pendingCount > 0 && (
-                            <Badge variant="destructive" className="h-4 min-w-[18px] px-1 text-[9px] font-bold">
-                              {pendingCount}
-                            </Badge>
-                          )}
-                          <span className="text-[10px] text-muted-foreground">
-                            {team.member_count}
-                          </span>
+                        <span className="ml-auto text-[10px] text-muted-foreground">
+                          {team.member_count}
                         </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  );
-                })}
+                  ))}
               </SidebarMenu>
             )}
           </SidebarGroupContent>
