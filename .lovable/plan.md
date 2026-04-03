@@ -1,69 +1,48 @@
 
 
-# Refatorar useCards.ts para card_assignees e card_teams
+# Perfil + Polish + Correções — Plano Final MVP
 
-## Contexto
+## Resumo
 
-A tabela `cards` não tem mais `assigned_to_profile` e `assigned_to_team` nos tipos TypeScript (foram removidos do schema). Isso causa build errors em CalendarCard, CardFormModal e useCards. A solução é enriquecer os cards no hook e exportar um tipo compatível.
+Profile page já existe e está funcional. Foco principal: correções obrigatórias (sidebar sem useCards, MonthView com botão "+", useCards resiliente) e polish de UX.
 
-## Mudanças em useCards.ts
-
-### 1. Tipo EnrichedCard com campos legados
-
-```typescript
-type AssigneeInfo = { id: string; full_name: string | null; avatar_url: string | null };
-type TeamInfo = { id: string; name: string };
-
-export type EnrichedCard = Card & {
-  assignees: AssigneeInfo[];
-  teams: TeamInfo[];
-  // Campos legados computados para backward compatibility
-  assigned_to_profile: string | null;
-  assigned_to_team: string | null;
-};
-```
-
-`assigned_to_profile` = primeiro assignee id (ou null). `assigned_to_team` = primeiro team id (ou null). Isso evita que CalendarCard e CardFormModal quebrem sem precisar editá-los agora.
-
-### 2. Query enriquecida
-
-Após buscar os cards, fazer duas queries paralelas:
-
-- `card_assignees` filtrado por `card_id.in(cardIds)`, com select `card_id, profile_id, profiles(id, full_name, avatar_url)`
-- `card_teams` filtrado por `card_id.in(cardIds)`, com select `card_id, team_id, teams(id, name)`
-
-Montar mapa `cardId → assignees[]` e `cardId → teams[]`, depois enriquecer cada card.
-
-### 3. Filtros atualizados
-
-Em vez de `card.assigned_to_profile`, verificar se `card.assignees.some(a => a.id === filters.profileId)`. Idem para teams.
-
-### 4. Mutations com gerência de junções
-
-Aceitar parâmetros extras opcionais:
-
-```typescript
-type CreateCardInput = TablesInsert<"cards"> & {
-  assignee_ids?: string[];
-  team_ids?: string[];
-};
-```
-
-Após INSERT/UPDATE do card:
-1. DELETE de card_assignees WHERE card_id
-2. INSERT em card_assignees para cada assignee_id
-3. DELETE de card_teams WHERE card_id
-4. INSERT em card_teams para cada team_id
-
-### 5. Nota sobre build errors existentes
-
-CalendarCard e CardFormModal importam `Tables<"cards">` diretamente e referenciam `assigned_to_profile`/`assigned_to_team`. Com o `EnrichedCard` exportando esses campos como propriedades computadas, basta trocar o tipo neles de `Card` para `EnrichedCard` — mas isso será feito num passo seguinte quando os componentes forem atualizados. **Para resolver os build errors agora**, será necessário também atualizar minimamente o tipo usado em CalendarCard e CardFormModal (de `Tables<"cards">` para `EnrichedCard`), o que envolve apenas trocar a importação de tipo, sem mudar lógica visual.
-
-## Arquivos alterados
+## Arquivos a alterar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/hooks/useCards.ts` | Queries enriquecidas, EnrichedCard, mutations com junções |
-| `src/components/calendar/CalendarCard.tsx` | Trocar tipo `Tables<"cards">` → `EnrichedCard` (só import) |
-| `src/components/calendar/CardFormModal.tsx` | Trocar tipo `Tables<"cards">` → `EnrichedCard` (só import) |
+| `src/components/AppSidebar.tsx` | Remover `useCards`, `isCardOverdue`, `pendingByTeam`. Times mostram apenas `member_count` |
+| `src/components/calendar/MonthView.tsx` | Clique no dia → navega DayView (leader e member). Botão "+" no hover (leader only) chama `openCreateModal` |
+| `src/hooks/useCards.ts` | Wrap enrichment queries em try/catch — fallback `assignees: [], teams: []` |
+| `src/components/calendar/WeekView.tsx` | Empty state quando sem cards. Skeleton no loading. Hover scale nos cards |
+| `src/components/calendar/DayView.tsx` | Empty state quando sem cards. Skeleton no loading. Hover scale nos cards |
+| `src/components/calendar/CalendarCard.tsx` | Adicionar `transition-transform hover:scale-[1.02]` |
+| `src/components/calendar/CardFormModal.tsx` | Esc fecha modal (já nativo do Dialog). Kbd handler Ctrl+Enter salva |
+| `src/contexts/CalendarContext.tsx` | Confirmar defaultFilters todos null (já está correto no código atual) |
+
+## Detalhes técnicos
+
+### 1. AppSidebar — remover useCards
+- Remover linhas 29-30 (imports de `useCards` e `isCardOverdue`)
+- Remover linha 44 (`const { cards: allCards } = useCards()`)
+- Remover linhas 49-56 (cálculo `pendingByTeam`)
+- Na lista de times, remover o badge de pendingCount (linhas 258-262), manter apenas `member_count`
+
+### 2. MonthView — botão "+" separado
+- `handleDayClick` agora navega para DayView para todos (leader e member): `setSelectedDate(day); setViewMode("day")`
+- Adicionar botão "+" (16x16, Plus icon) no canto superior direito de cada célula, visível no hover (desktop) ou sempre (mobile)
+- Botão "+" com `e.stopPropagation()` chama `openCreateModal(day)`
+- Visível apenas para leaders
+
+### 3. useCards — try/catch no enrichment
+- Envolver o `Promise.all` de assignees/teams em try/catch
+- No catch, log o erro e retornar cards com `assignees: [], teams: []`
+
+### 4. Polish visual
+- **Empty states**: WeekView e DayView exibem mensagem "Nenhuma demanda para este período" com ícone quando `cards.length === 0 && !isLoading`
+- **Loading skeletons**: Quando `isLoading`, mostrar 3-4 skeleton bars na área do calendário
+- **Hover nos cards**: `hover:scale-[1.02] transition-transform` no CalendarCard wrapper
+- **Transições de view**: Já existem via re-render; adicionar `animate-in fade-in` sutil no container da view
+
+### 5. CalendarContext — verificação
+- `defaultFilters` já tem todos os campos null — nenhuma mudança necessária
 
