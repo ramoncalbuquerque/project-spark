@@ -2,7 +2,9 @@ import { useCalendar } from "@/contexts/CalendarContext";
 import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import CalendarCard from "./CalendarCard";
+import { Plus } from "lucide-react";
 import {
   startOfMonth,
   endOfMonth,
