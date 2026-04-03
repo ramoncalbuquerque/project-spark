@@ -39,19 +39,9 @@ export function AppSidebar() {
   const { filters, setFilters, clearFilters } = useCalendar();
   const allProfiles = useAllProfiles();
   const { teams } = useTeams();
-  const { cards: allCards } = useCards();
   const isLeader = profile?.role === "leader";
 
   const hasFilters = filters.profileId || filters.teamId || filters.status || filters.cardType || filters.priority;
-
-  // Count pending cards per team (pending or visually overdue)
-  const pendingByTeam = new Map<string, number>();
-  for (const card of allCards) {
-    if (card.status === "completed") continue;
-    for (const t of card.teams ?? []) {
-      pendingByTeam.set(t.id, (pendingByTeam.get(t.id) ?? 0) + 1);
-    }
-  }
 
   return (
     <Sidebar className="border-r border-border bg-card">
