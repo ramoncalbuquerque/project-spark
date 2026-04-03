@@ -2,7 +2,9 @@ import { useCalendar } from "@/contexts/CalendarContext";
 import { useCards } from "@/hooks/useCards";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import CalendarCard from "./CalendarCard";
+import { Plus } from "lucide-react";
 import {
   startOfMonth,
   endOfMonth,
@@ -29,6 +31,7 @@ const MonthView = () => {
   const { cards } = useCards();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
+  const isMobile = useIsMobile();
   const isLeader = profile?.role === "leader";
 
   const monthStart = startOfMonth(selectedDate);
@@ -38,12 +41,13 @@ const MonthView = () => {
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
   const handleDayClick = (day: Date) => {
-    if (isLeader) {
-      openCreateModal(day);
-    } else {
-      setSelectedDate(day);
-      setViewMode("day");
-    }
+    setSelectedDate(day);
+    setViewMode("day");
+  };
+
+  const handleCreateClick = (e: React.MouseEvent, day: Date) => {
+    e.stopPropagation();
+    openCreateModal(day);
   };
 
   return (
@@ -72,22 +76,35 @@ const MonthView = () => {
           return (
             <div
               key={i}
-              className={`border-b border-r border-border/50 p-1 min-h-[80px] cursor-pointer hover:bg-accent/50 transition-colors ${
+              className={`group/cell border-b border-r border-border/50 p-1 min-h-[80px] cursor-pointer hover:bg-accent/50 transition-colors relative ${
                 !inMonth ? "bg-muted/30" : ""
               }`}
               onClick={() => handleDayClick(day)}
             >
-              <span
-                className={`inline-flex items-center justify-center w-7 h-7 text-sm rounded-full ${
-                  today
-                    ? "bg-primary text-primary-foreground font-bold"
-                    : inMonth
-                    ? "text-foreground"
-                    : "text-muted-foreground/40"
-                }`}
-              >
-                {format(day, "d")}
-              </span>
+              <div className="flex items-center justify-between">
+                <span
+                  className={`inline-flex items-center justify-center w-7 h-7 text-sm rounded-full ${
+                    today
+                      ? "bg-primary text-primary-foreground font-bold"
+                      : inMonth
+                      ? "text-foreground"
+                      : "text-muted-foreground/40"
+                  }`}
+                >
+                  {format(day, "d")}
+                </span>
+                {isLeader && (
+                  <button
+                    onClick={(e) => handleCreateClick(e, day)}
+                    className={`inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-opacity ${
+                      isMobile ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"
+                    }`}
+                    title="Criar card"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
               <div className="flex flex-col gap-0.5 mt-0.5">
                 {visible.map((card) => (
                   <CalendarCard key={card.id} card={card} compact />

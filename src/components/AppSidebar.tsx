@@ -20,14 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+
 import MiniCalendar from "@/components/MiniCalendar";
 import { useCardModal } from "@/contexts/CardContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useAllProfiles, useTeams } from "@/hooks/useTeams";
-import { useCards } from "@/hooks/useCards";
-import { isCardOverdue } from "@/components/calendar/CalendarCard";
 
 const navItems = [
   { title: "Calendário", url: "/dashboard", icon: Calendar },
@@ -41,19 +39,9 @@ export function AppSidebar() {
   const { filters, setFilters, clearFilters } = useCalendar();
   const allProfiles = useAllProfiles();
   const { teams } = useTeams();
-  const { cards: allCards } = useCards();
   const isLeader = profile?.role === "leader";
 
   const hasFilters = filters.profileId || filters.teamId || filters.status || filters.cardType || filters.priority;
-
-  // Count pending cards per team (pending or visually overdue)
-  const pendingByTeam = new Map<string, number>();
-  for (const card of allCards) {
-    if (card.status === "completed") continue;
-    for (const t of card.teams ?? []) {
-      pendingByTeam.set(t.id, (pendingByTeam.get(t.id) ?? 0) + 1);
-    }
-  }
 
   return (
     <Sidebar className="border-r border-border bg-card">
@@ -240,9 +228,7 @@ export function AppSidebar() {
               </p>
             ) : (
               <SidebarMenu>
-                {teams.map((team) => {
-                  const pendingCount = pendingByTeam.get(team.id) ?? 0;
-                  return (
+              {teams.map((team) => (
                     <SidebarMenuItem key={team.id}>
                       <SidebarMenuButton
                         onClick={() => {
@@ -255,20 +241,12 @@ export function AppSidebar() {
                       >
                         <Users className="mr-2 h-3.5 w-3.5" />
                         <span className="truncate">{team.name}</span>
-                        <span className="ml-auto flex items-center gap-1">
-                          {pendingCount > 0 && (
-                            <Badge variant="destructive" className="h-4 min-w-[18px] px-1 text-[9px] font-bold">
-                              {pendingCount}
-                            </Badge>
-                          )}
-                          <span className="text-[10px] text-muted-foreground">
-                            {team.member_count}
-                          </span>
+                        <span className="ml-auto text-[10px] text-muted-foreground">
+                          {team.member_count}
                         </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  );
-                })}
+                  ))}
               </SidebarMenu>
             )}
           </SidebarGroupContent>

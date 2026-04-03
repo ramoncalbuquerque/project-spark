@@ -99,36 +99,41 @@ export function useCards() {
       const cardIds = (rawCards as Card[]).map((c) => c.id);
       if (cardIds.length === 0) return [] as EnrichedCard[];
 
-      const [assigneesRes, teamsRes] = await Promise.all([
-        supabase
-          .from("card_assignees")
-          .select("card_id, profile_id, profiles(id, full_name, avatar_url)")
-          .in("card_id", cardIds),
-        supabase
-          .from("card_teams")
-          .select("card_id, team_id, teams(id, name)")
-          .in("card_id", cardIds),
-      ]);
-
-      if (assigneesRes.error) console.warn("card_assignees query error:", assigneesRes.error);
-      if (teamsRes.error) console.warn("card_teams query error:", teamsRes.error);
-
       const assigneeMap = new Map<string, AssigneeInfo[]>();
-      for (const row of assigneesRes.data ?? []) {
-        const p = row.profiles as unknown as AssigneeInfo | null;
-        if (!p) continue;
-        const list = assigneeMap.get(row.card_id) ?? [];
-        list.push(p);
-        assigneeMap.set(row.card_id, list);
-      }
-
       const teamMap = new Map<string, TeamInfo[]>();
-      for (const row of teamsRes.data ?? []) {
-        const t = row.teams as unknown as TeamInfo | null;
-        if (!t) continue;
-        const list = teamMap.get(row.card_id) ?? [];
-        list.push(t);
-        teamMap.set(row.card_id, list);
+
+      try {
+        const [assigneesRes, teamsRes] = await Promise.all([
+          supabase
+            .from("card_assignees")
+            .select("card_id, profile_id, profiles(id, full_name, avatar_url)")
+            .in("card_id", cardIds),
+          supabase
+            .from("card_teams")
+            .select("card_id, team_id, teams(id, name)")
+            .in("card_id", cardIds),
+        ]);
+
+        if (assigneesRes.error) console.warn("card_assignees query error:", assigneesRes.error);
+        if (teamsRes.error) console.warn("card_teams query error:", teamsRes.error);
+
+        for (const row of assigneesRes.data ?? []) {
+          const p = row.profiles as unknown as AssigneeInfo | null;
+          if (!p) continue;
+          const list = assigneeMap.get(row.card_id) ?? [];
+          list.push(p);
+          assigneeMap.set(row.card_id, list);
+        }
+
+        for (const row of teamsRes.data ?? []) {
+          const t = row.teams as unknown as TeamInfo | null;
+          if (!t) continue;
+          const list = teamMap.get(row.card_id) ?? [];
+          list.push(t);
+          teamMap.set(row.card_id, list);
+        }
+      } catch (enrichErr) {
+        console.warn("Failed to enrich cards with assignees/teams:", enrichErr);
       }
 
       return (rawCards as Card[]).map((card): EnrichedCard => {
