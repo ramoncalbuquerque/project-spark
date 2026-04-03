@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDragSelect } from "@/hooks/useDragSelect";
 import { useDragMove } from "@/hooks/useDragMove";
-import CalendarCard from "./CalendarCard";
+import CalendarCard, { OverflowBadge } from "./CalendarCard";
 import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
 import {
   startOfWeek,
@@ -17,10 +17,13 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarDays } from "lucide-react";
 
 const HOUR_COL_W = "w-12 min-w-[3rem]";
 const DAY_COL_W = "min-w-[44px]";
 const SHORT_DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const MAX_VISIBLE_CARDS = 3;
 
 const NowLine = () => {
   const [top, setTop] = useState(0);
@@ -76,7 +79,7 @@ const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; duration
 
 const WeekView = () => {
   const { selectedDate } = useCalendar();
-  const { cards, updateCard } = useCards();
+  const { cards, isLoading, updateCard } = useCards();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -116,8 +119,6 @@ const WeekView = () => {
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
 
-  // drag extracted from useDragSelect above
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = (8 - START_HOUR) * SLOT_HEIGHT;
@@ -131,7 +132,7 @@ const WeekView = () => {
 
   const handleSlotMouseDown = useCallback(
     (day: Date, hour: number) => {
-      if (dragMove) return; // Don't start select while moving
+      if (dragMove) return;
       onSelectDown(day, hour);
     },
     [dragMove, onSelectDown]
@@ -151,7 +152,6 @@ const WeekView = () => {
   const handleCardLongPress = useCallback(
     (card: Tables<"cards">) => {
       const start = parseISO(card.start_date);
-      // Find which day column this card belongs to
       const matchingDay = days.find(
         (d) => d.getFullYear() === start.getFullYear() && d.getMonth() === start.getMonth() && d.getDate() === start.getDate()
       );
@@ -163,6 +163,27 @@ const WeekView = () => {
   );
 
   const dropSlot = getDropSlot();
+
+  if (isLoading) {
+    return (
+      <div className="border border-border rounded-lg overflow-hidden bg-card h-full flex flex-col">
+        <div className="flex shrink-0 border-b border-border h-14">
+          <div className="w-12 shrink-0" />
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="flex-1 border-l border-border flex flex-col items-center justify-center gap-1 p-2">
+              <Skeleton className="h-3 w-8" />
+              <Skeleton className="h-5 w-5 rounded-full" />
+            </div>
+          ))}
+        </div>
+        <div className="flex-1 p-4 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -198,104 +219,137 @@ const WeekView = () => {
         })}
       </div>
 
-      {/* Grid */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-auto">
-        <div className="flex relative" style={{ height: HOURS.length * SLOT_HEIGHT }}>
-          {/* Hour labels */}
-          <div className={`${HOUR_COL_W} shrink-0 relative`}>
-            {HOURS.map((hour, i) => (
-              <div
-                key={hour}
-                className="absolute left-0 right-0 text-right pr-1.5 -translate-y-1/2 text-[10px] md:text-xs text-muted-foreground"
-                style={{ top: i * SLOT_HEIGHT }}
-              >
-                {`${String(hour).padStart(2, "0")}:00`}
-              </div>
-            ))}
-          </div>
-
-          {/* Day columns */}
-          {days.map((day, colIdx) => {
-            const today = isToday(day);
-            const positioned = positionCards(cards, day);
-            const showDropGhost =
-              dropSlot && dropSlot.day.getTime() === day.getTime();
-
-            return (
-              <div
-                key={colIdx}
-                className={`flex-1 ${DAY_COL_W} border-l border-border relative ${
-                  today ? "bg-primary/5" : ""
-                }`}
-              >
-                {HOURS.map((hour, rowIdx) => {
-                  const selected = isSlotSelected(day, hour);
-                  const isDropTarget =
-                    showDropGhost && hour === dropSlot!.hour;
-                  return (
-                    <div
-                      key={rowIdx}
-                      className={`border-b border-border/50 ${
-                        rowIdx % 2 === 0 ? "bg-muted/20" : ""
-                      } ${isLeader && !dragMove ? "cursor-crosshair" : ""} ${
-                        isLeader && dragMove ? "cursor-grabbing" : ""
-                      } ${
-                        selected
-                          ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
-                          : ""
-                      } ${
-                        isDropTarget
-                          ? "!bg-[rgba(27,94,32,0.1)]"
-                          : ""
-                      } transition-colors duration-100`}
-                      style={{ height: SLOT_HEIGHT }}
-                      onMouseDown={() => handleSlotMouseDown(day, hour)}
-                      onMouseEnter={() => handleSlotMouseEnter(day, hour)}
-                      onTouchStart={() => handleSlotMouseDown(day, hour)}
-                      data-hour={hour}
-                      data-day={day.toISOString()}
-                    />
-                  );
-                })}
-
-                {/* Drop ghost preview */}
-                {showDropGhost && dropSlot && (
-                  <DropGhost
-                    hour={dropSlot.hour}
-                    durationMinutes={dropSlot.durationMinutes}
-                    cardType={dragMove!.card.card_type}
-                  />
-                )}
-
-                {/* Absolutely positioned cards */}
-                {positioned.map((pc) => (
-                  <div
-                    key={pc.card.id}
-                    className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
-                    style={{
-                      top: pc.top,
-                      height: pc.height,
-                      left: pc.left,
-                      width: pc.width,
-                    }}
-                  >
-                    <CalendarCard
-                      card={pc.card}
-                      compact={isMobile}
-                      height={pc.height}
-                      isDragging={isCardBeingDragged(pc.card.id)}
-                      onLongPressStart={isLeader ? handleCardLongPress : undefined}
-                      onLongPressCancel={cancelLongPress}
-                    />
-                  </div>
-                ))}
-
-                {today && <NowLine />}
-              </div>
-            );
-          })}
+      {/* Empty state overlay */}
+      {cards.length === 0 && !isLoading && (
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+          <CalendarDays className="h-12 w-12 text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">
+            Nenhuma demanda para este período.
+          </p>
+          {isLeader && (
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Clique em + Criar para começar!
+            </p>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* Grid */}
+      {(cards.length > 0 || isLoading) && (
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-auto">
+          <div className="flex relative" style={{ height: HOURS.length * SLOT_HEIGHT }}>
+            {/* Hour labels */}
+            <div className={`${HOUR_COL_W} shrink-0 relative`}>
+              {HOURS.map((hour, i) => (
+                <div
+                  key={hour}
+                  className="absolute left-0 right-0 text-right pr-1.5 -translate-y-1/2 text-[10px] md:text-xs text-muted-foreground"
+                  style={{ top: i * SLOT_HEIGHT }}
+                >
+                  {`${String(hour).padStart(2, "0")}:00`}
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
+            {days.map((day, colIdx) => {
+              const today = isToday(day);
+              const positioned = positionCards(cards, day);
+              const showDropGhost =
+                dropSlot && dropSlot.day.getTime() === day.getTime();
+
+              // Overflow: limit visible cards per slot
+              const visibleCards = positioned.slice(0, MAX_VISIBLE_CARDS);
+              const overflowCount = positioned.length - MAX_VISIBLE_CARDS;
+
+              return (
+                <div
+                  key={colIdx}
+                  className={`flex-1 ${DAY_COL_W} border-l border-border relative ${
+                    today ? "bg-primary/5" : ""
+                  }`}
+                >
+                  {HOURS.map((hour, rowIdx) => {
+                    const selected = isSlotSelected(day, hour);
+                    const isDropTarget =
+                      showDropGhost && hour === dropSlot!.hour;
+                    return (
+                      <div
+                        key={rowIdx}
+                        className={`border-b border-border/50 ${
+                          rowIdx % 2 === 0 ? "bg-muted/20" : ""
+                        } ${isLeader && !dragMove ? "cursor-crosshair" : ""} ${
+                          isLeader && dragMove ? "cursor-grabbing" : ""
+                        } ${
+                          selected
+                            ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
+                            : ""
+                        } ${
+                          isDropTarget
+                            ? "!bg-[rgba(27,94,32,0.1)]"
+                            : ""
+                        } transition-colors duration-100`}
+                        style={{ height: SLOT_HEIGHT }}
+                        onMouseDown={() => handleSlotMouseDown(day, hour)}
+                        onMouseEnter={() => handleSlotMouseEnter(day, hour)}
+                        onTouchStart={() => handleSlotMouseDown(day, hour)}
+                        data-hour={hour}
+                        data-day={day.toISOString()}
+                      />
+                    );
+                  })}
+
+                  {/* Drop ghost preview */}
+                  {showDropGhost && dropSlot && (
+                    <DropGhost
+                      hour={dropSlot.hour}
+                      durationMinutes={dropSlot.durationMinutes}
+                      cardType={dragMove!.card.card_type}
+                    />
+                  )}
+
+                  {/* Absolutely positioned cards */}
+                  {visibleCards.map((pc) => (
+                    <div
+                      key={pc.card.id}
+                      className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
+                      style={{
+                        top: pc.top,
+                        height: pc.height,
+                        left: pc.left,
+                        width: pc.width,
+                      }}
+                    >
+                      <CalendarCard
+                        card={pc.card}
+                        compact={isMobile}
+                        height={pc.height}
+                        isDragging={isCardBeingDragged(pc.card.id)}
+                        onLongPressStart={isLeader ? handleCardLongPress : undefined}
+                        onLongPressCancel={cancelLongPress}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Overflow badge */}
+                  {overflowCount > 0 && (
+                    <div className="absolute bottom-1 left-0 right-0 z-[6] text-center">
+                      <OverflowBadge
+                        count={overflowCount}
+                        onClick={() => {
+                          // Navigate to day view for this day
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {today && <NowLine />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

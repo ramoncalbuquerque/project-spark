@@ -168,6 +168,13 @@ const CardFormModal = () => {
     setSelectedTeamIds((prev) => prev.filter((tid) => tid !== id));
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim() || !startDate || !user) return;
     setSaving(true);
