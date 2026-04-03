@@ -168,6 +168,13 @@ const CardFormModal = () => {
     setSelectedTeamIds((prev) => prev.filter((tid) => tid !== id));
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   const handleSave = async () => {
     if (!title.trim() || !startDate || !user) return;
     setSaving(true);
@@ -223,6 +230,7 @@ const CardFormModal = () => {
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
       <DialogContent
+        onKeyDown={handleKeyDown}
         className={
           isMobile
             ? "fixed inset-0 max-w-none w-full h-full rounded-none translate-x-0 translate-y-0 left-0 top-0 flex flex-col"

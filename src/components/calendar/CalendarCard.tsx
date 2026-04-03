@@ -113,7 +113,7 @@ const CalendarCard = ({
       onMouseUp={handlePointerUp}
       onTouchEnd={handlePointerUp}
       onMouseLeave={handlePointerLeave}
-      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight cursor-pointer hover:shadow-md hover:brightness-110 transition-all overflow-hidden flex flex-col justify-start relative ${color} ${
+      className={`w-full h-full text-left rounded-[6px] px-2 py-1 text-white text-[11px] leading-tight cursor-pointer hover:shadow-md hover:brightness-110 hover:scale-[1.02] transition-all overflow-hidden flex flex-col justify-start relative ${color} ${
         isDragging ? "opacity-30" : ""
       } ${overdue ? "border-l-[3px] !border-l-red-500" : "border-l-2"}`}
       title={card.title}

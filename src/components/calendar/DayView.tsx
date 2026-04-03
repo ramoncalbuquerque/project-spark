@@ -10,6 +10,8 @@ import { positionCards, HOURS, SLOT_HEIGHT, START_HOUR } from "./calendarUtils";
 import { format, isToday, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarDays } from "lucide-react";
 
 /** Ghost preview of where the card will be dropped */
 const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; durationMinutes: number; cardType: string }) => {
@@ -32,7 +34,7 @@ const DropGhost = ({ hour, durationMinutes, cardType }: { hour: number; duration
 
 const DayView = () => {
   const { selectedDate } = useCalendar();
-  const { cards, updateCard } = useCards();
+  const { cards, isLoading, updateCard } = useCards();
   const { openCreateModal } = useCardModal();
   const { profile } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -71,8 +73,6 @@ const DayView = () => {
     isCardBeingDragged,
     getDropSlot,
   } = useDragMove({ enabled: isLeader, onMove: handleMove });
-
-  // drag extracted from useDragSelect above
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -128,6 +128,25 @@ const DayView = () => {
   const dropSlot = getDropSlot();
   const showDropGhost = dropSlot && dropSlot.day.getTime() === selectedDate.getTime();
 
+  if (isLoading) {
+    return (
+      <div className="border border-border rounded-lg overflow-hidden bg-card h-full flex flex-col">
+        <div className="flex border-b border-border shrink-0 h-14">
+          <div className="w-14 shrink-0" />
+          <div className="flex-1 flex flex-col items-center justify-center gap-1 p-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-5 w-5 rounded-full" />
+          </div>
+        </div>
+        <div className="flex-1 p-4 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col h-full border border-border rounded-lg overflow-hidden bg-card select-none"
@@ -148,87 +167,104 @@ const DayView = () => {
         </div>
       </div>
 
+      {/* Empty state */}
+      {cards.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+          <CalendarDays className="h-12 w-12 text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">
+            Nenhuma demanda para este dia.
+          </p>
+          {isLeader && (
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Clique em + Criar para começar!
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="flex relative" style={{ height: HOURS.length * SLOT_HEIGHT }}>
-          <div className="w-14 shrink-0 relative">
-            {HOURS.map((hour, i) => (
-              <div
-                key={hour}
-                className="absolute left-0 right-0 text-right pr-2 -translate-y-1/2 text-xs text-muted-foreground"
-                style={{ top: i * SLOT_HEIGHT }}
-              >
-                {`${String(hour).padStart(2, "0")}:00`}
-              </div>
-            ))}
-          </div>
-
-          <div className={`flex-1 border-l border-border relative ${today ? "bg-primary/5" : ""}`}>
-            {HOURS.map((hour, rowIdx) => {
-              const selected = isSlotSelected(selectedDate, hour);
-              const isDropTarget = showDropGhost && hour === dropSlot!.hour;
-              return (
+      {cards.length > 0 && (
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          <div className="flex relative" style={{ height: HOURS.length * SLOT_HEIGHT }}>
+            <div className="w-14 shrink-0 relative">
+              {HOURS.map((hour, i) => (
                 <div
-                  key={rowIdx}
-                  className={`border-b border-border/50 ${rowIdx % 2 === 0 ? "bg-muted/20" : ""} ${
-                    isLeader && !dragMove ? "cursor-crosshair" : ""
-                  } ${isLeader && dragMove ? "cursor-grabbing" : ""} ${
-                    selected
-                      ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
-                      : ""
-                  } ${isDropTarget ? "!bg-[rgba(27,94,32,0.1)]" : ""} transition-colors duration-100`}
-                  style={{ height: SLOT_HEIGHT }}
-                  onMouseDown={() => handleSlotMouseDown(hour)}
-                  onMouseEnter={() => handleSlotMouseEnter(hour)}
-                  onTouchStart={() => handleSlotMouseDown(hour)}
-                  data-hour={hour}
-                  data-day={selectedDate.toISOString()}
-                />
-              );
-            })}
-
-            {/* Drop ghost preview */}
-            {showDropGhost && dropSlot && (
-              <DropGhost
-                hour={dropSlot.hour}
-                durationMinutes={dropSlot.durationMinutes}
-                cardType={dragMove!.card.card_type}
-              />
-            )}
-
-            {/* Absolutely positioned cards */}
-            {positioned.map((pc) => (
-              <div
-                key={pc.card.id}
-                className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
-                style={{
-                  top: pc.top,
-                  height: pc.height,
-                  left: pc.left,
-                  width: pc.width,
-                }}
-              >
-                <CalendarCard
-                  card={pc.card}
-                  height={pc.height}
-                  isDragging={isCardBeingDragged(pc.card.id)}
-                  onLongPressStart={isLeader ? handleCardLongPress : undefined}
-                  onLongPressCancel={cancelLongPress}
-                />
-              </div>
-            ))}
-
-            {nowTop !== null && (
-              <div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top: nowTop }}>
-                <div className="relative w-full">
-                  <div className="absolute left-0 w-2 h-2 rounded-full bg-destructive -translate-y-1/2" />
-                  <div className="absolute left-0 right-0 h-[2px] bg-destructive" />
+                  key={hour}
+                  className="absolute left-0 right-0 text-right pr-2 -translate-y-1/2 text-xs text-muted-foreground"
+                  style={{ top: i * SLOT_HEIGHT }}
+                >
+                  {`${String(hour).padStart(2, "0")}:00`}
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+
+            <div className={`flex-1 border-l border-border relative ${today ? "bg-primary/5" : ""}`}>
+              {HOURS.map((hour, rowIdx) => {
+                const selected = isSlotSelected(selectedDate, hour);
+                const isDropTarget = showDropGhost && hour === dropSlot!.hour;
+                return (
+                  <div
+                    key={rowIdx}
+                    className={`border-b border-border/50 ${rowIdx % 2 === 0 ? "bg-muted/20" : ""} ${
+                      isLeader && !dragMove ? "cursor-crosshair" : ""
+                    } ${isLeader && dragMove ? "cursor-grabbing" : ""} ${
+                      selected
+                        ? "!bg-[rgba(27,94,32,0.15)] border border-dashed !border-primary/40"
+                        : ""
+                    } ${isDropTarget ? "!bg-[rgba(27,94,32,0.1)]" : ""} transition-colors duration-100`}
+                    style={{ height: SLOT_HEIGHT }}
+                    onMouseDown={() => handleSlotMouseDown(hour)}
+                    onMouseEnter={() => handleSlotMouseEnter(hour)}
+                    onTouchStart={() => handleSlotMouseDown(hour)}
+                    data-hour={hour}
+                    data-day={selectedDate.toISOString()}
+                  />
+                );
+              })}
+
+              {/* Drop ghost preview */}
+              {showDropGhost && dropSlot && (
+                <DropGhost
+                  hour={dropSlot.hour}
+                  durationMinutes={dropSlot.durationMinutes}
+                  cardType={dragMove!.card.card_type}
+                />
+              )}
+
+              {/* Absolutely positioned cards */}
+              {positioned.map((pc) => (
+                <div
+                  key={pc.card.id}
+                  className={`absolute z-[5] px-0.5 ${drag ? "pointer-events-none" : ""}`}
+                  style={{
+                    top: pc.top,
+                    height: pc.height,
+                    left: pc.left,
+                    width: pc.width,
+                  }}
+                >
+                  <CalendarCard
+                    card={pc.card}
+                    height={pc.height}
+                    isDragging={isCardBeingDragged(pc.card.id)}
+                    onLongPressStart={isLeader ? handleCardLongPress : undefined}
+                    onLongPressCancel={cancelLongPress}
+                  />
+                </div>
+              ))}
+
+              {nowTop !== null && (
+                <div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top: nowTop }}>
+                  <div className="relative w-full">
+                    <div className="absolute left-0 w-2 h-2 rounded-full bg-destructive -translate-y-1/2" />
+                    <div className="absolute left-0 right-0 h-[2px] bg-destructive" />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -9,11 +9,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useEffect, useState } from "react";
 
 const AppHeader = () => {
   const navigate = useNavigate();
   const { profile, signOut } = useAuth();
+  const [todayLabel, setTodayLabel] = useState("");
+
+  useEffect(() => {
+    const update = () =>
+      setTodayLabel(format(new Date(), "EEEE, d 'de' MMMM", { locale: ptBR }));
+    update();
+    const id = setInterval(update, 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const initials = profile?.full_name
     ? profile.full_name
@@ -31,12 +43,18 @@ const AppHeader = () => {
         <span className="text-lg font-bold text-primary select-none">
           🌱 Semear
         </span>
+        <span className="hidden sm:inline-block text-xs text-muted-foreground capitalize ml-2">
+          {todayLabel}
+        </span>
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="rounded-full">
             <Avatar className="h-8 w-8">
+              {profile?.avatar_url && (
+                <AvatarImage src={profile.avatar_url} alt={profile.full_name || ""} />
+              )}
               <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                 {initials}
               </AvatarFallback>
