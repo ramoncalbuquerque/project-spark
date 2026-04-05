@@ -13,9 +13,11 @@ import QuickCreateBar from "@/components/feed/QuickCreateBar";
 
 const FILTERS: { key: FeedStatusFilter; label: string }[] = [
   { key: "all", label: "Todos" },
-  { key: "overdue", label: "Atrasados" },
+  { key: "overdue", label: "Prazo vencido" },
+  { key: "pending", label: "Pendentes" },
   { key: "in_progress", label: "Em andamento" },
   { key: "completed", label: "Concluídos" },
+  { key: "cancelled", label: "Cancelados" },
 ];
 
 type DateGroup = { key: string; label: string; cards: EnrichedFeedCard[] };
