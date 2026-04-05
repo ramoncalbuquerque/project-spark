@@ -198,9 +198,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
           ? new Date(card.end_date) < now
           : false;
         const history = historyMap.get(card.id);
-        const isNewThisOcc = !carriedCardIds.has(card.id) && !previousOccurrenceId
-          ? true
-          : !carriedCardIds.has(card.id);
+        const isNewThisOcc = !carriedCardIds.has(card.id);
         return {
           ...card,
           assignees: assigneeMap.get(card.id) ?? [],
