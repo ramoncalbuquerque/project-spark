@@ -29,6 +29,7 @@ const STATUS_OPTIONS = [
   { value: "pending", label: "Pendente", color: "#94A3B8" },
   { value: "in_progress", label: "Em andamento", color: "#3B82F6" },
   { value: "completed", label: "Concluído", color: "#22C55E" },
+  { value: "cancelled", label: "Cancelado", color: "#EF4444" },
 ];
 
 const PRIORITY_OPTIONS = [

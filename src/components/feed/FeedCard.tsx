@@ -10,6 +10,7 @@ const STATUS_COLOR: Record<string, string> = {
   in_progress: "#3B82F6",
   completed: "#22C55E",
   pending: "#94A3B8",
+  cancelled: "#6B7280",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -17,6 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_progress: "Em andamento",
   completed: "Concluído",
   pending: "Pendente",
+  cancelled: "Cancelado",
 };
 
 const TYPE_ICON: Record<string, { icon: typeof CheckSquare; color: string }> = {
