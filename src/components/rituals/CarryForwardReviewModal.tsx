@@ -90,7 +90,7 @@ export default function CarryForwardReviewModal({
                 {format(occDate, "dd/MM/yyyy")}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-auto p-0 z-[70]" align="start">
               <Calendar
                 mode="single"
                 selected={occDate}
