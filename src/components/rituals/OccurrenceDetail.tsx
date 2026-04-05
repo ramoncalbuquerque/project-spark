@@ -221,6 +221,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
       qc.invalidateQueries({ queryKey: ["occurrence-cards", occurrence.id] });
       qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
       qc.invalidateQueries({ queryKey: ["feed-cards"] });
+      qc.invalidateQueries({ queryKey: ["carry-forward"] });
     },
   });
 
