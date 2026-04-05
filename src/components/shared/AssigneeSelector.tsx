@@ -121,11 +121,6 @@ function DropdownBody({
   getLabel: (o: AssigneeOption) => string;
   userId?: string;
 }) {
-  search: string;
-  setSearch: (s: string) => void;
-  getLabel: (o: AssigneeOption) => string;
-  userId?: string;
-}) {
   return (
     <div className="max-h-60 overflow-hidden flex flex-col">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
