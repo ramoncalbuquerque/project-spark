@@ -19,6 +19,7 @@ import RitualsPage from "./pages/v2/RitualsPage";
 import TaskDetailPage from "./pages/v2/TaskDetailPage";
 import ProjectDetailPage from "./pages/v2/ProjectDetailPage";
 import RitualDetailPage from "./pages/v2/RitualDetailPage";
+import ImportRitualsPage from "./pages/v2/ImportRitualsPage";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/app/task/:id" element={<TaskDetailPage />} />
               <Route path="/app/project/:id" element={<ProjectDetailPage />} />
               <Route path="/app/ritual/:id" element={<RitualDetailPage />} />
+              <Route path="/app/import-rituals" element={<ImportRitualsPage />} />
             </Route>
 
             <Route path="/" element={<Navigate to="/app/feed" replace />} />
