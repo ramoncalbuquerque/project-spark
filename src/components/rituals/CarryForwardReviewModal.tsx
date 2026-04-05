@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,9 +35,14 @@ export default function CarryForwardReviewModal({
   onConfirm,
   isCreating,
 }: Props) {
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(pendingItems.map((c) => c.id))
-  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Sync selected when modal opens or pendingItems change
+  useEffect(() => {
+    if (open) {
+      setSelected(new Set(pendingItems.map((c) => c.id)));
+    }
+  }, [open, pendingItems]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -57,7 +62,7 @@ export default function CarryForwardReviewModal({
   const now = new Date();
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center gap-3">
         <button onClick={onClose} className="p-1">
