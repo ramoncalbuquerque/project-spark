@@ -35,9 +35,14 @@ export default function CarryForwardReviewModal({
   onConfirm,
   isCreating,
 }: Props) {
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(pendingItems.map((c) => c.id))
-  );
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Sync selected when modal opens or pendingItems change
+  useEffect(() => {
+    if (open) {
+      setSelected(new Set(pendingItems.map((c) => c.id)));
+    }
+  }, [open, pendingItems]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
