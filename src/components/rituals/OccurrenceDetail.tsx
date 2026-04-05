@@ -11,7 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Lock, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Lock, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -259,6 +263,34 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
       toast.success("Ocorrência fechada");
       qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
       qc.invalidateQueries({ queryKey: ["rituals"] });
+    },
+  });
+
+  const deleteOccurrence = useMutation({
+    mutationFn: async () => {
+      // 1. Unlink cards
+      await supabase
+        .from("cards")
+        .update({ ritual_occurrence_id: null })
+        .eq("ritual_occurrence_id", occurrence.id);
+      // 2. Unlink task_history
+      await supabase
+        .from("task_history")
+        .update({ ritual_occurrence_id: null })
+        .eq("ritual_occurrence_id", occurrence.id);
+      // 3. Delete occurrence
+      const { error } = await supabase
+        .from("ritual_occurrences")
+        .delete()
+        .eq("id", occurrence.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Ocorrência excluída. As tarefas foram preservadas.");
+      qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
+      qc.invalidateQueries({ queryKey: ["rituals"] });
+      qc.invalidateQueries({ queryKey: ["carry-forward"] });
+      qc.invalidateQueries({ queryKey: ["feed-cards"] });
     },
   });
 
@@ -525,17 +557,51 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         </>
       )}
 
-      {/* Close occurrence */}
+      {/* Close / Delete occurrence */}
       {isOpen && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full text-xs"
-          onClick={() => closeOccurrence.mutate()}
-          disabled={closeOccurrence.isPending}
-        >
-          <Lock size={12} className="mr-1" /> Fechar ocorrência
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 text-xs"
+            onClick={() => closeOccurrence.mutate()}
+            disabled={closeOccurrence.isPending}
+          >
+            <Lock size={12} className="mr-1" /> Fechar ocorrência
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-destructive hover:text-destructive"
+              >
+                <Trash2 size={12} className="mr-1" /> Excluir
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir ocorrência?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {cards.length > 0
+                    ? `Esta ocorrência tem ${cards.length} ite${cards.length !== 1 ? "ns" : "m"} e notas. As tarefas serão PRESERVADAS no sistema, mas as observações registradas nesta reunião serão perdidas.`
+                    : "As observações registradas nesta reunião serão perdidas."}
+                  {"\n\nDeseja continuar?"}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => deleteOccurrence.mutate()}
+                  disabled={deleteOccurrence.isPending}
+                >
+                  Excluir mesmo assim
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       )}
     </div>
   );
