@@ -39,11 +39,12 @@ export default function CarryForwardReviewModal({
   isCreating,
 }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-
+  const [occDate, setOccDate] = useState<Date>(new Date());
   // Sync selected when modal opens or pendingItems change
   useEffect(() => {
     if (open) {
       setSelected(new Set(pendingItems.map((c) => c.id)));
+      setOccDate(new Date());
     }
   }, [open, pendingItems]);
 
