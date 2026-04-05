@@ -140,6 +140,7 @@ export function useOrgImport() {
               department: row.departamento || null,
               position: row.cargo || null,
               created_by: user.id,
+            
             })
             .select("id")
             .single();
