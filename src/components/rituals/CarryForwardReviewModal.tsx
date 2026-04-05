@@ -82,6 +82,24 @@ export default function CarryForwardReviewModal({
             </p>
           )}
         </div>
+        <div className="px-4 py-2 border-b border-border">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 w-full justify-start">
+                <CalendarIcon size={14} />
+                {format(occDate, "dd/MM/yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={occDate}
+                onSelect={(d) => d && setOccDate(d)}
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {/* Content */}
@@ -163,7 +181,7 @@ export default function CarryForwardReviewModal({
           </Button>
           <Button
             className="flex-1 h-11 bg-primary hover:bg-primary/90"
-            onClick={() => onConfirm([...selected])}
+            onClick={() => onConfirm([...selected], occDate)}
             disabled={isCreating}
           >
             {isCreating ? "Criando..." : "Criar ocorrência"}
