@@ -473,6 +473,14 @@ export default function ImportRitualsPage() {
     }
   };
 
+  if (!isLeader) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-sm text-muted-foreground">Acesso restrito a líderes.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-background z-10 border-b border-border">
