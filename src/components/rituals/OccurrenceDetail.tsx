@@ -222,7 +222,7 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
               : null;
 
             return (
-              <div key={card.id} className="bg-white border border-[hsl(var(--border))] rounded-lg p-3">
+              <div key={card.id} className="bg-card border border-border rounded-lg p-3">
                 <button
                   onClick={() => navigate(`/app/task/${card.id}`)}
                   className="w-full text-left flex items-start gap-2"
@@ -274,7 +274,7 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
                               addContextNote.mutate({ cardId: card.id, note: contextInputs[card.id].trim() });
                             }
                           }}
-                          className="text-[#4F46E5]"
+                          className="text-primary"
                         >
                           <Send size={14} />
                         </button>
@@ -285,7 +285,7 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
                     ) : (
                       <button
                         onClick={() => setActiveContextId(card.id)}
-                        className="text-[10px] text-[#4F46E5] mt-1.5"
+                        className="text-[10px] text-primary mt-1.5"
                       >
                         + Atualizar contexto
                       </button>
@@ -312,7 +312,7 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
           />
           <Button
             size="sm"
-            className="h-8 bg-[#4F46E5] hover:bg-[#4338CA] px-2"
+            className="h-8 bg-primary hover:bg-primary/90 px-2"
             onClick={() => newItemTitle.trim() && addItem.mutate()}
             disabled={!newItemTitle.trim() || addItem.isPending}
           >
@@ -335,7 +335,7 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
         {notesDirty && isOpen && (
           <Button
             size="sm"
-            className="mt-1 h-7 text-xs bg-[#4F46E5] hover:bg-[#4338CA]"
+            className="mt-1 h-7 text-xs bg-primary hover:bg-primary/90"
             onClick={() => saveNotes.mutate()}
             disabled={saveNotes.isPending}
           >

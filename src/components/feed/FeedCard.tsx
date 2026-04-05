@@ -42,7 +42,7 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
   return (
     <button
       onClick={() => navigate(`/app/task/${card.id}`)}
-      className="w-full text-left bg-white border border-[hsl(var(--border))] rounded-xl p-3 relative"
+      className="w-full text-left bg-card border border-border rounded-xl p-3 relative transition-shadow hover:shadow-md"
       style={{ borderLeftWidth: 3, borderLeftColor: borderColor }}
     >
       {/* Row 1: status + type + time */}
@@ -89,7 +89,7 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
               e.stopPropagation();
               navigate(`/app/project/${card.project_id}`);
             }}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-[hsl(239_84%_67%/0.1)] text-[#4F46E5] font-medium hover:bg-[hsl(239_84%_67%/0.2)] transition-colors"
+            className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors"
           >
             @{card.project_name}
           </button>

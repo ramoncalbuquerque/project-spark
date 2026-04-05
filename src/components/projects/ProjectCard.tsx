@@ -4,9 +4,9 @@ import { Progress } from "@/components/ui/progress";
 import type { EnrichedProject } from "@/hooks/useProjects";
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
-  active: { label: "Ativo", className: "bg-[#22C55E]/10 text-[#22C55E] border-none" },
-  completed: { label: "Concluído", className: "bg-[#3B82F6]/10 text-[#3B82F6] border-none" },
-  archived: { label: "Arquivado", className: "bg-[#94A3B8]/10 text-[#94A3B8] border-none" },
+  active: { label: "Ativo", className: "bg-green-500/10 text-green-600 border-none" },
+  completed: { label: "Concluído", className: "bg-blue-500/10 text-blue-600 border-none" },
+  archived: { label: "Arquivado", className: "bg-muted text-muted-foreground border-none" },
 };
 
 export default function ProjectCard({ project }: { project: EnrichedProject }) {
@@ -18,7 +18,7 @@ export default function ProjectCard({ project }: { project: EnrichedProject }) {
   return (
     <button
       onClick={() => navigate(`/app/project/${project.id}`)}
-      className="w-full text-left bg-white border border-[hsl(var(--border))] rounded-xl p-4 space-y-2"
+      className="w-full text-left bg-card border border-border rounded-xl p-4 space-y-2 transition-shadow hover:shadow-md"
     >
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-foreground truncate pr-2">{project.name}</p>
@@ -27,7 +27,7 @@ export default function ProjectCard({ project }: { project: EnrichedProject }) {
         </Badge>
       </div>
 
-      <Progress value={pct} className="h-1.5 bg-[#E2E8F0]" />
+      <Progress value={pct} className="h-1.5" />
 
       <p className="text-[11px] text-muted-foreground">
         {counts.pending} abertas · {counts.in_progress} em andamento · {counts.completed} concluídas

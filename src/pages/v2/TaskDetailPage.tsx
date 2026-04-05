@@ -107,9 +107,9 @@ export default function TaskDetailPage() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAF8]">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-[hsl(var(--border))] bg-white shrink-0">
+      <div className="flex items-center gap-2 px-4 h-12 border-b border-border bg-card shrink-0">
         <button onClick={() => navigate(-1)} className="p-1">
           <ArrowLeft size={20} className="text-foreground" />
         </button>
@@ -193,7 +193,7 @@ export default function TaskDetailPage() {
             {card.project_name && (
               <button
                 onClick={() => navigate(`/app/project/${card.project_id}`)}
-                className="text-[11px] px-2 py-0.5 rounded-full bg-[hsl(239_84%_67%/0.1)] text-[#4F46E5] font-medium"
+                className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
               >
                 @{card.project_name}
               </button>
@@ -207,7 +207,7 @@ export default function TaskDetailPage() {
         )}
 
         {/* ─── CHECKLIST ─── */}
-        <section className="bg-white rounded-xl border border-[hsl(var(--border))] p-3">
+        <section className="bg-card rounded-xl border border-border p-3">
           <div className="flex items-center gap-2 mb-2">
             <CheckSquare size={16} className="text-muted-foreground" />
             <span className="text-xs font-semibold text-foreground">
@@ -268,7 +268,7 @@ export default function TaskDetailPage() {
             <div className="relative pl-4 border-l-2 border-muted space-y-3">
               {history.map((h) => (
                 <div key={h.id} className="relative">
-                  <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-muted-foreground/40 border-2 border-[#FAFAF8]" />
+                  <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-muted-foreground/40 border-2 border-background" />
                   <p className="text-[11px] text-muted-foreground">
                     {format(new Date(h.created_at), "d MMM yyyy, HH:mm", { locale: ptBR })}
                     {h.updated_by_name && ` — ${h.updated_by_name}`}
@@ -365,7 +365,7 @@ export default function TaskDetailPage() {
                         href={getDownloadUrl(att.file_url)}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[#4F46E5] truncate flex-1 hover:underline"
+                        className="text-primary truncate flex-1 hover:underline"
                       >
                         {att.file_name}
                       </a>

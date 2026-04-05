@@ -66,9 +66,9 @@ export default function RitualDetailPage() {
   const defaultOpen = occurrences.length > 0 ? [occurrences[0].id] : [];
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAF8]">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-[#FAFAF8] z-10 border-b border-[hsl(var(--border))]">
+      <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-background z-10 border-b border-border">
         <button onClick={() => navigate("/app/rituals")} className="p-1">
           <ArrowLeft size={20} />
         </button>
@@ -115,7 +115,7 @@ export default function RitualDetailPage() {
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4 pt-3">
         {/* New occurrence button */}
         <Button
-          className="w-full bg-[#4F46E5] hover:bg-[#4338CA] h-12 text-sm font-medium"
+          className="w-full bg-primary hover:bg-primary/90 h-12 text-sm font-medium"
           onClick={handleNewOccurrence}
           disabled={creating}
         >
@@ -139,7 +139,7 @@ export default function RitualDetailPage() {
               <AccordionItem
                 key={occ.id}
                 value={occ.id}
-                className="bg-white border border-[hsl(var(--border))] rounded-xl overflow-hidden"
+                className="bg-card border border-border rounded-xl overflow-hidden"
               >
                 <AccordionTrigger className="px-4 py-3 hover:no-underline">
                   <div className="flex items-center gap-2 text-left flex-1 min-w-0">

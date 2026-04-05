@@ -171,9 +171,9 @@ export default function ProjectDetailPage() {
   const badge = STATUS_BADGE[project.status] ?? STATUS_BADGE.active;
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAF8]">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-[#FAFAF8] z-10 border-b border-[hsl(var(--border))]">
+      <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-background z-10 border-b border-border">
         <button onClick={() => navigate("/app/projects")} className="p-1">
           <ArrowLeft size={20} />
         </button>
@@ -220,7 +220,7 @@ export default function ProjectDetailPage() {
           {COUNTER_CARDS.map((c) => (
             <div
               key={c.key}
-              className="bg-white rounded-lg border border-[hsl(var(--border))] p-3 text-center"
+              className="bg-card rounded-lg border border-border p-3 text-center"
             >
               <p className="text-2xl font-semibold" style={{ color: c.color }}>
                 {counts[c.key]}
@@ -266,7 +266,7 @@ export default function ProjectDetailPage() {
                 <button
                   key={d.id}
                   onClick={() => navigate(`/app/ritual/${d.id}`)}
-                  className="w-full flex items-center justify-between bg-white rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs"
+                  className="w-full flex items-center justify-between bg-card rounded-lg border border-border px-3 py-2 text-xs"
                 >
                   <span className="text-foreground font-medium">{d.ritualName}</span>
                   <span className="text-muted-foreground">
@@ -283,7 +283,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-medium text-foreground">Membros</h2>
             {isCreator && (
-              <button onClick={loadProfiles} className="text-[#4F46E5]">
+              <button onClick={loadProfiles} className="text-primary">
                 <UserPlus size={16} />
               </button>
             )}
@@ -326,7 +326,7 @@ export default function ProjectDetailPage() {
 
           <div className="space-y-1.5">
             {project.members.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 bg-white rounded-lg border border-[hsl(var(--border))] px-3 py-2">
+              <div key={m.id} className="flex items-center gap-2 bg-card rounded-lg border border-border px-3 py-2">
                 <Avatar className="h-6 w-6">
                   <AvatarImage src={m.avatar_url ?? undefined} />
                   <AvatarFallback className="text-[10px]">
@@ -383,9 +383,9 @@ export default function ProjectDetailPage() {
 
       {/* Sticky new task button */}
       {canEdit && !showNewTask && (
-        <div className="sticky bottom-14 px-4 pb-2 bg-[#FAFAF8]">
+        <div className="sticky bottom-14 px-4 pb-2 bg-background">
           <Button
-            className="w-full bg-[#4F46E5] hover:bg-[#4338CA]"
+            className="w-full bg-primary hover:bg-primary/90"
             onClick={() => setShowNewTask(true)}
           >
             <Plus size={16} className="mr-1" /> Nova Tarefa
@@ -394,7 +394,7 @@ export default function ProjectDetailPage() {
       )}
 
       {showNewTask && (
-        <div className="sticky bottom-14 px-4 pb-2 bg-[#FAFAF8] space-y-2 border-t border-[hsl(var(--border))] pt-2">
+        <div className="sticky bottom-14 px-4 pb-2 bg-background space-y-2 border-t border-border pt-2">
           <Input
             placeholder="Título da tarefa"
             value={newTitle}
@@ -419,7 +419,7 @@ export default function ProjectDetailPage() {
             </Popover>
             <Button
               size="sm"
-              className="bg-[#4F46E5] hover:bg-[#4338CA] text-xs"
+              className="bg-primary hover:bg-primary/90 text-xs"
               onClick={() => createTaskMutation.mutate()}
               disabled={!newTitle.trim() || createTaskMutation.isPending}
             >

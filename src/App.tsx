@@ -9,12 +9,8 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import AppLayout from "./components/AppLayout";
 import AppShellV2 from "./components/AppShellV2";
-import Dashboard from "./pages/Dashboard";
-import Teams from "./pages/Teams";
 import Profile from "./pages/Profile";
-import NotFound from "./pages/NotFound";
 import FeedPage from "./pages/v2/FeedPage";
 import PeoplePage from "./pages/v2/PeoplePage";
 import AgendaPage from "./pages/v2/AgendaPage";
@@ -39,7 +35,6 @@ const App = () => (
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
-            {/* v2 layout */}
             <Route
               element={
                 <ProtectedRoute>
@@ -58,21 +53,8 @@ const App = () => (
               <Route path="/app/ritual/:id" element={<RitualDetailPage />} />
             </Route>
 
-            {/* v1 layout (mantido) */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/teams" element={<Teams />} />
-              <Route path="/perfil" element={<Profile />} />
-            </Route>
-
             <Route path="/" element={<Navigate to="/app/feed" replace />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<Navigate to="/app/feed" replace />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

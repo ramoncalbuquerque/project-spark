@@ -20,8 +20,8 @@ const AppShellV2 = () => {
     : "U";
 
   return (
-    <div className="h-dvh flex flex-col bg-[#FAFAF8]">
-      <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-[#FAFAF8] border-b border-[#EEEEE9]">
+    <div className="h-dvh flex flex-col bg-background">
+      <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-background border-b border-border">
         <span className="text-base font-bold select-none">🌱 Semear</span>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -30,7 +30,7 @@ const AppShellV2 = () => {
                 {profile?.avatar_url && (
                   <AvatarImage src={profile.avatar_url} alt={profile.full_name || ""} />
                 )}
-                <AvatarFallback className="bg-[#4F46E5]/10 text-[#4F46E5] text-xs font-semibold">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -47,7 +47,7 @@ const AppShellV2 = () => {
         </DropdownMenu>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-14">
+      <main className="flex-1 overflow-y-auto pb-14 animate-in fade-in duration-150">
         <Outlet />
       </main>
 

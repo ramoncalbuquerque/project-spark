@@ -14,17 +14,22 @@ const BottomNav = () => {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-14 bg-white border-t border-[#EEEEE9] flex items-center justify-around z-50">
+    <nav className="fixed bottom-0 left-0 right-0 h-14 bg-background border-t border-border flex items-center justify-around z-50">
       {tabs.map(({ path, label, icon: Icon }) => {
         const active = location.pathname.startsWith(path);
         return (
           <button
             key={path}
             onClick={() => navigate(path)}
-            className="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] gap-0.5"
+            className={`flex flex-col items-center justify-center min-w-[44px] min-h-[44px] gap-0.5 relative ${
+              active ? "text-primary" : "text-muted-foreground"
+            }`}
           >
-            <Icon size={20} className={active ? "text-[#4F46E5]" : "text-[#94A3B8]"} />
-            <span className={`text-[10px] leading-tight ${active ? "text-[#4F46E5] font-medium" : "text-[#94A3B8]"}`}>
+            {active && (
+              <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-6 h-[3px] rounded-full bg-primary" />
+            )}
+            <Icon size={20} />
+            <span className={`text-[11px] leading-tight ${active ? "font-semibold" : "font-normal"}`}>
               {label}
             </span>
           </button>
