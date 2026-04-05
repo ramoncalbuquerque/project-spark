@@ -120,7 +120,7 @@ export function useOrgImport() {
             .update({
               department: row.departamento || null,
               position: row.cargo || null,
-              phone: row.celular || null,
+              phone: row.celular && row.celular !== "N/A" ? row.celular : null,
               hierarchy_level: hierarchy,
             })
             .eq("id", profileId);
