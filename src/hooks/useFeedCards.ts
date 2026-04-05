@@ -47,7 +47,7 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
       const projectMap = new Map<string, string>();
 
       try {
-        const promises: Promise<void>[] = [];
+        const promises: PromiseLike<void>[] = [];
 
         // Assignees
         promises.push(
