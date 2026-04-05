@@ -23,6 +23,7 @@ import { useTaskDetail } from "@/hooks/useTaskDetail";
 import { useTaskHistory } from "@/hooks/useTaskHistory";
 import { useAgendaItems } from "@/hooks/useAgendaItems";
 import { useAttachments } from "@/hooks/useAttachments";
+import AssigneeSelector from "@/components/shared/AssigneeSelector";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "Pendente", color: "#94A3B8" },
@@ -46,7 +47,7 @@ const TYPE_OPTIONS = [
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { card, isLoading, canEditAll, updateCard, deleteCard } = useTaskDetail(id);
+  const { card, isLoading, canEditAll, updateCard, updateAssignees, deleteCard } = useTaskDetail(id);
   const { history } = useTaskHistory(id);
   const { items: checklistItems, addItem, toggleItem, deleteItem } = useAgendaItems(id ?? null);
   const { attachments, uploadFile, deleteFile, getDownloadUrl } = useAttachments(id ?? null);
@@ -308,19 +309,10 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            <div>
-              <span className="text-muted-foreground text-xs block mb-1">Responsáveis</span>
-              <div className="flex flex-wrap gap-1">
-                {card.assignees.map((a) => (
-                  <Badge key={a.id} variant="secondary" className="text-[11px]">
-                    {a.full_name ?? "Sem nome"}
-                  </Badge>
-                ))}
-                {card.assignees.length === 0 && (
-                  <span className="text-xs text-muted-foreground">Nenhum</span>
-                )}
-              </div>
-            </div>
+            <AssigneeSelector
+              selected={card.assignees.map((a) => a.id)}
+              onChange={(ids) => updateAssignees.mutate(ids)}
+            />
 
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground text-xs">Prazo</span>
