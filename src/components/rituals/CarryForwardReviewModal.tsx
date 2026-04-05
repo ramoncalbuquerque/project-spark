@@ -57,7 +57,7 @@ export default function CarryForwardReviewModal({
   const now = new Date();
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center gap-3">
         <button onClick={onClose} className="p-1">
