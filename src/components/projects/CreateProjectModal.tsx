@@ -121,7 +121,7 @@ export default function CreateProjectModal({ open, onClose, onCreate, loading }:
           )}
 
           <Button
-            className="w-full bg-[#4F46E5] hover:bg-[#4338CA]"
+            className="w-full bg-primary hover:bg-primary/90"
             onClick={handleCreate}
             disabled={!name.trim() || loading}
           >
