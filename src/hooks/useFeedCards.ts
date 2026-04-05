@@ -156,7 +156,7 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["feed-cards"] });
 
   const createQuickTask = useMutation({
-    mutationFn: async ({ title, start_date }: { title: string; start_date: string }) => {
+    mutationFn: async ({ title, start_date, assignee_ids }: { title: string; start_date: string; assignee_ids?: string[] }) => {
       if (!user) throw new Error("Não autenticado");
       const { data, error } = await supabase
         .from("cards")
@@ -170,6 +170,14 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
         .select()
         .single();
       if (error) throw error;
+
+      if (assignee_ids && assignee_ids.length > 0) {
+        const { error: assignError } = await supabase
+          .from("card_assignees")
+          .insert(assignee_ids.map((pid) => ({ card_id: data.id, profile_id: pid })));
+        if (assignError) console.warn("Failed to assign:", assignError);
+      }
+
       return data;
     },
     onSuccess: () => {

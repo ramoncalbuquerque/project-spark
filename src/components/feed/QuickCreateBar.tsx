@@ -6,30 +6,35 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import AssigneeSelector from "@/components/shared/AssigneeSelector";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 interface QuickCreateBarProps {
-  createQuickTask: UseMutationResult<unknown, Error, { title: string; start_date: string }>;
+  createQuickTask: UseMutationResult<unknown, Error, { title: string; start_date: string; assignee_ids?: string[] }>;
 }
 
 export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState<Date>(new Date());
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleFocus = () => setExpanded(true);
 
   const handleClose = () => {
     setExpanded(false);
     setTitle("");
     setDate(new Date());
+    setAssigneeIds([]);
   };
 
   const handleCreate = () => {
     if (!title.trim()) return;
     createQuickTask.mutate(
-      { title: title.trim(), start_date: date.toISOString() },
+      {
+        title: title.trim(),
+        start_date: date.toISOString(),
+        assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
+      },
       { onSuccess: handleClose }
     );
   };
@@ -68,7 +73,7 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
             <X size={18} />
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
@@ -85,6 +90,13 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
               />
             </PopoverContent>
           </Popover>
+
+          <AssigneeSelector
+            selected={assigneeIds}
+            onChange={setAssigneeIds}
+            compact
+          />
+
           <Button
             size="sm"
             className="h-8 ml-auto bg-primary hover:bg-primary/90 text-white text-xs"
