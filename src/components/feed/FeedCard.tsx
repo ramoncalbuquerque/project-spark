@@ -46,10 +46,12 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
   const TypeIcon = typeEntry.icon;
 
   // Build meta items
-  const metaItems: string[] = [];
-  if (deadlineStr) metaItems.push(`Prazo: ${deadlineStr}`);
-  if (card.assignees.length === 1) metaItems.push(card.assignees[0].full_name ?? "");
-  if (card.checklist_total > 0) metaItems.push(`${card.checklist_done}/${card.checklist_total}`);
+  const metaParts: React.ReactNode[] = [];
+  if (deadlineStr) metaParts.push(<span key="d">Prazo: {deadlineStr}</span>);
+  if (card.assignees.length === 1) metaParts.push(<span key="a">{card.assignees[0].full_name ?? ""}</span>);
+  if (card.checklist_total > 0) metaParts.push(
+    <span key="c" className="inline-flex items-center gap-0.5"><CheckSquare size={10} className="inline" />{card.checklist_done}/{card.checklist_total}</span>
+  );
 
   return (
     <button
