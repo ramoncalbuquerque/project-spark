@@ -1,65 +1,51 @@
-
-
-# Proteções de Segurança para Ocorrências e Ritualísticas
+# Importação em massa de Ritualísticas históricas
 
 ## Resumo
-
-Adicionar modais de confirmação detalhados ao excluir ocorrências e ritualísticas, preservando cards (desvinculando em vez de deletar). Tornar o carry-forward resiliente a ocorrências deletadas.
+Criar página temporária `/app/import-rituals` para importação CSV de dados históricos de ritualísticas com carry-forward. Adicionar status "cancelled" ao sistema.
 
 ## Mudanças
 
-### 1. Excluir ocorrência com proteção (OccurrenceDetail.tsx)
+### 1. Adicionar status "cancelled" ao sistema
+- Adicionar visual para cancelled: ícone X vermelho, texto riscado com opacity 0.5
+- Atualizar `OccurrenceDetail.tsx` (renderização de status dos cards na ocorrência)
+- NÃO tocar em FeedCard conforme instrução
 
-Adicionar botão "Excluir ocorrência" (apenas para ocorrências abertas, ao lado de "Fechar ocorrência") com AlertDialog customizado:
-- Texto dinâmico: "Esta ocorrência tem {cards.length} itens e notas."
-- Ao confirmar:
-  1. `UPDATE cards SET ritual_occurrence_id = NULL WHERE ritual_occurrence_id = occurrence.id`
-  2. `UPDATE task_history SET ritual_occurrence_id = NULL WHERE ritual_occurrence_id = occurrence.id` (precisa de RLS policy UPDATE para task_history)
-  3. `DELETE ritual_occurrences WHERE id = occurrence.id`
-  4. Toast: "Ocorrência excluída. As tarefas foram preservadas."
-  5. Invalidar queries
+### 2. Criar página ImportRitualsPage.tsx
+Página com 3 telas (estados):
 
-**Migração necessária**: Adicionar RLS policy UPDATE em `task_history` para que o usuário possa setar `ritual_occurrence_id = null`. Também adicionar DELETE policy em `ritual_occurrences` para creator (já existe via `is_ritual_creator`).
+**Tela 1 — Upload**: Botão upload CSV, texto com formato esperado
 
-### 2. Excluir ritualística com proteção (RitualDetailPage.tsx)
+**Tela 2 — Preview**: Após parsing do CSV:
+- Resumo: N ritualísticas · N ocorrências · N tarefas · N carry-forwards
+- Lista com nome, responsável (match/warning), contadores
+- Warnings de responsáveis não encontrados
+- Botões "Importar tudo" + "Cancelar"
 
-Substituir o AlertDialog atual por versão enriquecida:
-- Buscar contagem de ocorrências e cards vinculados antes de exibir o modal
-- Texto: "A ritualística '{name}' tem {X} ocorrências e {Y} tarefas vinculadas."
-- Ao confirmar:
-  1. Buscar todos os `ritual_occurrence` IDs desta ritualística
-  2. `UPDATE cards SET ritual_occurrence_id = NULL WHERE ritual_occurrence_id IN (...)` 
-  3. `UPDATE task_history SET ritual_occurrence_id = NULL WHERE ritual_occurrence_id IN (...)`
-  4. `DELETE rituals WHERE id = ritual.id` (cascade deleta occurrences e members)
-  5. Navegar para `/app/rituals`
+**Tela 3 — Progresso**: Progress bar com fases, log de erros/warnings, botão final
 
-### 3. Carry-forward resiliente (useCarryForward.ts)
+**Lógica de importação**:
+1. Agrupar CSV por ritual_name → criar rituals + ritual_members
+2. Agrupar por ritual_name + occurrence_date → criar ritual_occurrences (status=closed)
+3. Processar itens em ordem cronológica por ritualística:
+   - Mapa `Map<key, {card_id, lastStatus, lastContext, lastOccId}>` para carry-forward
+   - Normalização: lowercase, trim, remover parênteses, fuzzy match (primeiras palavras)
+   - Primeira aparição → criar card + task_history + card_assignees
+   - Reaparição → atualizar card status/occurrence, criar task_history com dados anteriores
+4. Batches de 10, erros não param importação
 
-A lógica atual já busca a ocorrência mais recente por data (`ORDER BY date DESC LIMIT 1`), então naturalmente pega a "penúltima" se a última foi deletada. Nenhuma mudança estrutural necessária.
+### 3. Rota e navegação
+- Rota `/app/import-rituals` no App.tsx (dentro de ProtectedRoute)
+- Botão na RitualsPage visível apenas para leaders
+- Buscar profiles e contacts para matching de responsáveis
 
-Porém, adicionar fallback: se nenhuma ocorrência existe mas há cards com `origin_type = 'ritual'` e `ritual_occurrence_id IS NULL` que pertencem a esta ritualística (via assignees que são membros), buscá-los como pendentes. Na prática isso é edge case raro e o retorno atual de `pendingItems: []` com mensagem "Nenhum item pendente" já é adequado. Manter simples.
-
-### 4. Migração SQL
-
-```sql
--- Allow authenticated users to update task_history (for nullifying ritual_occurrence_id)
-CREATE POLICY "Users with card access can update history"
-ON public.task_history
-FOR UPDATE
-TO authenticated
-USING (can_access_card(auth.uid(), card_id))
-WITH CHECK (can_access_card(auth.uid(), card_id));
-```
-
-### Arquivos modificados
+## Arquivos
 
 | Arquivo | Mudança |
 |---------|---------|
-| Migration SQL | Policy UPDATE em task_history |
-| `src/components/rituals/OccurrenceDetail.tsx` | Botão + modal de excluir ocorrência com lógica de desvinculação |
-| `src/pages/v2/RitualDetailPage.tsx` | Modal de excluir ritualística com contagens dinâmicas e desvinculação de cards |
-| `src/hooks/useCarryForward.ts` | Nenhuma mudança (já resiliente) |
+| `src/pages/v2/ImportRitualsPage.tsx` | **NOVO** — Página completa de importação |
+| `src/App.tsx` | Adicionar rota |
+| `src/pages/v2/RitualsPage.tsx` | Botão "Importar R.A.s históricas" para leaders |
+| `src/components/rituals/OccurrenceDetail.tsx` | Visual do status cancelled |
 
-### Arquivos NÃO tocados
-FeedCard, layout da ocorrência, Projetos, Agenda, Pessoas.
-
+## NÃO tocar em
+Feed, Projetos, TaskDetail, Pessoas, Agenda, schema do banco
