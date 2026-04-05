@@ -86,11 +86,11 @@ export default function RitualDetailPage() {
     ? getNextSuggestion(lastOcc.date, ritual.frequency)
     : null;
 
-  const handleConfirmCreate = async (selectedCardIds: string[]) => {
+  const handleConfirmCreate = async (selectedCardIds: string[], date: Date) => {
     if (!id || !user) return;
     setCreating(true);
     try {
-      const newOcc = await createOccurrence.mutateAsync();
+      const newOcc = await createOccurrence.mutateAsync({ date: date.toISOString() });
 
       // For each selected card: move to new occurrence + record history on PREVIOUS occurrence
       for (const cardId of selectedCardIds) {
