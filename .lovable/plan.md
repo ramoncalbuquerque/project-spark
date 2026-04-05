@@ -1,48 +1,80 @@
 
 
-# Perfil + Polish + Correções — Plano Final MVP
+# Migração do Schema — Semear v2
 
-## Resumo
+## Visão geral
 
-Profile page já existe e está funcional. Foco principal: correções obrigatórias (sidebar sem useCards, MonthView com botão "+", useCards resiliente) e polish de UX.
+Uma única migração SQL que: altera 3 tabelas existentes (profiles, cards, teams), cria 7 novas tabelas, adiciona 2 funções SECURITY DEFINER e aplica RLS em todas as novas tabelas.
 
-## Arquivos a alterar
+## Migração SQL
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/AppSidebar.tsx` | Remover `useCards`, `isCardOverdue`, `pendingByTeam`. Times mostram apenas `member_count` |
-| `src/components/calendar/MonthView.tsx` | Clique no dia → navega DayView (leader e member). Botão "+" no hover (leader only) chama `openCreateModal` |
-| `src/hooks/useCards.ts` | Wrap enrichment queries em try/catch — fallback `assignees: [], teams: []` |
-| `src/components/calendar/WeekView.tsx` | Empty state quando sem cards. Skeleton no loading. Hover scale nos cards |
-| `src/components/calendar/DayView.tsx` | Empty state quando sem cards. Skeleton no loading. Hover scale nos cards |
-| `src/components/calendar/CalendarCard.tsx` | Adicionar `transition-transform hover:scale-[1.02]` |
-| `src/components/calendar/CardFormModal.tsx` | Esc fecha modal (já nativo do Dialog). Kbd handler Ctrl+Enter salva |
-| `src/contexts/CalendarContext.tsx` | Confirmar defaultFilters todos null (já está correto no código atual) |
+### Parte 1 — Alterar tabelas existentes
 
-## Detalhes técnicos
+**profiles**: adicionar `department TEXT`, `position TEXT`, `superior_id UUID REFERENCES profiles(id)`, `hierarchy_level TEXT` com validação via trigger (não CHECK, pois é boa prática).
 
-### 1. AppSidebar — remover useCards
-- Remover linhas 29-30 (imports de `useCards` e `isCardOverdue`)
-- Remover linha 44 (`const { cards: allCards } = useCards()`)
-- Remover linhas 49-56 (cálculo `pendingByTeam`)
-- Na lista de times, remover o badge de pendingCount (linhas 258-262), manter apenas `member_count`
+**teams**: adicionar `department TEXT`, `is_org_unit BOOLEAN DEFAULT false`.
 
-### 2. MonthView — botão "+" separado
-- `handleDayClick` agora navega para DayView para todos (leader e member): `setSelectedDate(day); setViewMode("day")`
-- Adicionar botão "+" (16x16, Plus icon) no canto superior direito de cada célula, visível no hover (desktop) ou sempre (mobile)
-- Botão "+" com `e.stopPropagation()` chama `openCreateModal(day)`
-- Visível apenas para leaders
+**projects** e **ritual_occurrences** precisam existir antes de alterar cards, então a ordem será:
 
-### 3. useCards — try/catch no enrichment
-- Envolver o `Promise.all` de assignees/teams em try/catch
-- No catch, log o erro e retornar cards com `assignees: [], teams: []`
+1. Criar `projects` e `rituals` primeiro
+2. Criar `ritual_occurrences`
+3. Alterar `cards` com FKs para `projects` e `ritual_occurrences`
 
-### 4. Polish visual
-- **Empty states**: WeekView e DayView exibem mensagem "Nenhuma demanda para este período" com ícone quando `cards.length === 0 && !isLoading`
-- **Loading skeletons**: Quando `isLoading`, mostrar 3-4 skeleton bars na área do calendário
-- **Hover nos cards**: `hover:scale-[1.02] transition-transform` no CalendarCard wrapper
-- **Transições de view**: Já existem via re-render; adicionar `animate-in fade-in` sutil no container da view
+### Parte 2 — Novas tabelas (em ordem de FK)
 
-### 5. CalendarContext — verificação
-- `defaultFilters` já tem todos os campos null — nenhuma mudança necessária
+| Tabela | Colunas principais | Notas |
+|--------|-------------------|-------|
+| `projects` | id, name, description, status DEFAULT 'active', created_by FK profiles, timestamps | Base para agrupamento |
+| `project_members` | id, project_id FK CASCADE, profile_id FK CASCADE, role DEFAULT 'member', joined_at | UNIQUE(project_id, profile_id) |
+| `rituals` | id, name, description, frequency TEXT, created_by FK profiles, timestamps | Cadências recorrentes |
+| `ritual_members` | id, ritual_id FK CASCADE, profile_id FK CASCADE | UNIQUE(ritual_id, profile_id) |
+| `ritual_occurrences` | id, ritual_id FK CASCADE, date TIMESTAMPTZ NOT NULL, notes TEXT, status DEFAULT 'open', created_by FK profiles, created_at | Cada "sessão" |
+| `task_history` | id, card_id FK CASCADE, ritual_occurrence_id FK ritual_occurrences, status_at_time TEXT, context_note TEXT, updated_by FK profiles, created_at | Histórico por ocorrência |
+| `contacts` | id, full_name NOT NULL, phone NOT NULL, department, position, created_by FK profiles, linked_profile_id FK profiles NULL, created_at | Contatos sem conta |
+
+Depois de criar projects e ritual_occurrences:
+
+**cards**: adicionar `project_id UUID REFERENCES projects(id) ON DELETE SET NULL`, `ritual_occurrence_id UUID REFERENCES ritual_occurrences(id) ON DELETE SET NULL`, `origin_type TEXT DEFAULT 'standalone'` com validação via trigger.
+
+### Parte 3 — Funções SECURITY DEFINER
+
+```text
+is_project_member(project_id, user_id) → boolean
+  SELECT EXISTS (SELECT 1 FROM project_members WHERE ...)
+
+is_ritual_member(ritual_id, user_id) → boolean
+  SELECT EXISTS (SELECT 1 FROM ritual_members WHERE ...)
+```
+
+### Parte 4 — RLS Policies
+
+| Tabela | SELECT | INSERT | UPDATE | DELETE |
+|--------|--------|--------|--------|--------|
+| projects | `is_project_member OR created_by` | `leader only` | `created_by` | `created_by` |
+| project_members | `is_project_member` | `is_project_creator` | — | `is_project_creator` |
+| rituals | `is_ritual_member OR created_by` | `leader only` | `created_by` | `created_by` |
+| ritual_members | `is_ritual_member OR created_by` | `created_by of ritual` | — | `created_by of ritual` |
+| ritual_occurrences | `is_ritual_member` | `authenticated + is_ritual_member` | `is_ritual_member` | `created_by of ritual` |
+| task_history | `can_access_card` | `authenticated + can_access_card` | — | — |
+| contacts | leaders only (all ops) | leaders only | leaders only | leaders only |
+
+### Parte 5 — Triggers updated_at
+
+Aplicar `update_updated_at_column()` (já existe) em: `projects`, `rituals`.
+
+### Validações via trigger (não CHECK)
+
+- `profiles.hierarchy_level`: trigger BEFORE INSERT/UPDATE valida IN ('alto','medio','baixo', NULL)
+- `cards.origin_type`: trigger BEFORE INSERT/UPDATE valida IN ('standalone','project','ritual','meeting')
+
+## O que NÃO será alterado
+
+- Nenhum arquivo React/TypeScript
+- Nenhuma tabela existente terá colunas removidas
+- RLS existente permanece intacta
+- Funções helper existentes permanecem
+
+## Resultado
+
+Após a migração, os tipos TypeScript serão regenerados automaticamente pelo sistema, refletindo as novas tabelas e campos.
 
