@@ -289,12 +289,9 @@ export default function TaskDetailPage() {
         )}
 
         {/* ─── METADATA ─── */}
-        <details className="group">
-          <summary className="flex items-center gap-1 text-xs font-semibold text-muted-foreground cursor-pointer list-none">
-            <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
-            Metadados
-          </summary>
-          <div className="mt-3 space-y-3 text-sm">
+        <section>
+          <h3 className="text-xs font-semibold text-muted-foreground mb-3">Metadados</h3>
+          <div className="space-y-3 text-sm">
             {canEditAll && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground text-xs">Tipo</span>
@@ -373,7 +370,7 @@ export default function TaskDetailPage() {
               )}
             </div>
           </div>
-        </details>
+        </section>
 
         {/* Delete */}
         {canEditAll && (

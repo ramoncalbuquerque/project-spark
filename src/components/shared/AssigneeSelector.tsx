@@ -28,11 +28,13 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
     .map((id) => options.find((o) => o.id === id))
     .filter(Boolean) as AssigneeOption[];
 
-  const toggle = (id: string) => {
-    if (selected.includes(id)) {
-      onChange(selected.filter((s) => s !== id));
+  const toggle = (o: AssigneeOption) => {
+    // Contacts can't be assigned (FK constraint on card_assignees → profiles)
+    if (o.type === "contact") return;
+    if (selected.includes(o.id)) {
+      onChange(selected.filter((s) => s !== o.id));
     } else {
-      onChange([...selected, id]);
+      onChange([...selected, o.id]);
     }
   };
 
@@ -73,7 +75,7 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
           {selectedOptions.map((o) => (
             <Badge key={o.id} variant="secondary" className="text-[11px] gap-1 pr-1">
               {getLabel(o)}
-              <button onClick={() => toggle(o.id)} className="ml-0.5 hover:text-destructive">
+              <button onClick={() => toggle(o)} className="ml-0.5 hover:text-destructive">
                 <X size={12} />
               </button>
             </Badge>
@@ -113,7 +115,7 @@ function DropdownBody({
 }: {
   filtered: AssigneeOption[];
   selected: string[];
-  toggle: (id: string) => void;
+  toggle: (o: AssigneeOption) => void;
   search: string;
   setSearch: (s: string) => void;
   getLabel: (o: AssigneeOption) => string;
@@ -140,8 +142,9 @@ function DropdownBody({
           return (
             <button
               key={o.id}
-              onClick={() => toggle(o.id)}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-xs hover:bg-accent transition-colors ${isSelected ? "bg-accent/60" : ""}`}
+              onClick={() => toggle(o)}
+              disabled={o.type === "contact"}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-xs transition-colors ${o.type === "contact" ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"} ${isSelected ? "bg-accent/60" : ""}`}
             >
               <Avatar className="h-5 w-5">
                 <AvatarImage src={o.avatar_url ?? undefined} />
