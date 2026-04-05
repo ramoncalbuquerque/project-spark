@@ -423,6 +423,7 @@ export default function ImportRitualsPage() {
 
               if (error) {
                 addLog(`⚠️ Erro tarefa '${item.item_title}': ${error.message}`);
+                failedItemsList.push({ item, occId: occInfo.id, cardTitle: item.item_title.trim(), status, personMatch });
                 itemsDone++;
                 continue;
               }
