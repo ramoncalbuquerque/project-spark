@@ -117,13 +117,6 @@ export default function ImportRitualsPage() {
   const [peopleCache, setPeopleCache] = useState<PersonMatch[]>([]);
 
   const isLeader = profile?.role === "leader";
-  if (!isLeader) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sm text-muted-foreground">Acesso restrito a líderes.</p>
-      </div>
-    );
-  }
 
   /* ─── Step 1: Parse CSV ─── */
   const handleFile = async (file: File) => {
