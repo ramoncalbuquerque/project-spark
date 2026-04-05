@@ -22,7 +22,10 @@ const AppShellV2 = () => {
   return (
     <div className="h-dvh flex flex-col bg-background">
       <header className="h-12 shrink-0 flex items-center justify-between px-4 bg-background border-b border-border">
-        <span className="text-base font-bold select-none">🌱 Semear</span>
+        <div className="flex items-center gap-2">
+          <img src={logoMunnir} alt="Munnir" className="h-7 w-7 rounded-md object-cover" />
+          <span className="text-base font-bold select-none text-primary">Munnir</span>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
