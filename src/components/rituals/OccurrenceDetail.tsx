@@ -35,13 +35,14 @@ type OccurrenceCard = Card & {
   lastContextNote: string | null;
 };
 
-// Status rotation: pending → in_progress → completed → not_done → pending
-const STATUS_CYCLE = ["pending", "in_progress", "completed", "not_done"];
+// Status rotation: pending → in_progress → completed → not_done → cancelled → pending
+const STATUS_CYCLE = ["pending", "in_progress", "completed", "not_done", "cancelled"];
 const STATUS_COLORS: Record<string, string> = {
   pending: "#94A3B8",
   in_progress: "#F59E0B",
   completed: "#22C55E",
   not_done: "#EF4444",
+  cancelled: "#EF4444",
   overdue: "#EF4444",
 };
 const STATUS_LABEL: Record<string, string> = {
@@ -49,6 +50,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_progress: "Em andamento",
   completed: "Concluído",
   not_done: "Não feito",
+  cancelled: "Cancelado",
 };
 
 interface Props {
@@ -172,9 +174,9 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
   const completedCards = cards.filter((c) => c.status === "completed").length;
   const newCards = cards.filter((c) => c.isNewThisOcc).length;
 
-  // Sort: active first, completed at bottom
-  const activeCards = cards.filter((c) => c.status !== "completed");
-  const doneCards = cards.filter((c) => c.status === "completed");
+  // Sort: active first, completed/cancelled at bottom
+  const activeCards = cards.filter((c) => c.status !== "completed" && c.status !== "cancelled");
+  const doneCards = cards.filter((c) => c.status === "completed" || c.status === "cancelled");
 
   const isOpen = occurrence.status === "open";
 
@@ -306,6 +308,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
     const color = STATUS_COLORS[displayStatus] ?? STATUS_COLORS.pending;
     const isCompleted = card.status === "completed";
     const isNotDone = card.status === "not_done";
+    const isCancelled = card.status === "cancelled";
     const assignee = card.assignees[0];
     const sinceStr = card.firstSeen
       ? format(new Date(card.firstSeen), "MMM/yy", { locale: ptBR })
@@ -314,7 +317,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
     return (
       <div
         key={card.id}
-        className={`bg-card border border-border rounded-lg p-3 ${isCompleted ? "opacity-70" : ""}`}
+        className={`bg-card border border-border rounded-lg p-3 ${isCompleted ? "opacity-70" : ""} ${isCancelled ? "opacity-50" : ""}`}
       >
         <div className="flex items-start gap-3">
           {/* Status circle */}
@@ -330,7 +333,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
                 width: 24,
                 height: 24,
                 borderColor: color,
-                backgroundColor: isCompleted || isNotDone ? color : "transparent",
+                backgroundColor: isCompleted || isNotDone || isCancelled ? color : "transparent",
               }}
             >
               {isCompleted && (
@@ -339,6 +342,11 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
                 </svg>
               )}
               {isNotDone && (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M3 3L9 9M9 3L3 9" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              )}
+              {isCancelled && (
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path d="M3 3L9 9M9 3L3 9" stroke="white" strokeWidth="2" strokeLinecap="round" />
                 </svg>
@@ -352,7 +360,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
               onClick={() => navigate(`/app/task/${card.id}`)}
               className="text-left w-full"
             >
-              <p className={`text-[13px] font-medium text-foreground truncate ${isCompleted ? "line-through" : ""}`}>
+              <p className={`text-[13px] font-medium text-foreground truncate ${isCompleted ? "line-through" : ""} ${isCancelled ? "line-through" : ""}`}>
                 {card.title}
               </p>
             </button>
