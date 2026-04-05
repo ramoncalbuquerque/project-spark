@@ -6,12 +6,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Lock, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Plus, Lock, Trash2, ChevronDown, Check, X } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -35,27 +36,70 @@ type OccurrenceCard = Card & {
   lastContextNote: string | null;
 };
 
-// Status rotation: pending → in_progress → completed → not_done → cancelled → pending
-const STATUS_CYCLE = ["pending", "in_progress", "completed", "not_done", "cancelled"];
-const STATUS_COLORS: Record<string, string> = {
-  pending: "#94A3B8",
-  in_progress: "#F59E0B",
-  completed: "#22C55E",
-  not_done: "#EF4444",
-  cancelled: "#EF4444",
-  overdue: "#EF4444",
-};
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Pendente",
-  in_progress: "Em andamento",
-  completed: "Concluído",
-  not_done: "Não feito",
-  cancelled: "Cancelado",
-};
+const STATUS_CYCLE = ["pending", "in_progress", "completed", "cancelled"];
 
 interface Props {
   occurrence: EnrichedOccurrence;
   previousOccurrenceId: string | null;
+}
+
+/* ─── Status Circle ─── */
+function StatusCircle({
+  status,
+  onClick,
+  disabled,
+}: {
+  status: string;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  const config: Record<string, { border: string; bg: string; content: React.ReactNode }> = {
+    pending: {
+      border: "#94A3B8",
+      bg: "#F8FAFC",
+      content: <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: "#94A3B8", display: "block" }} />,
+    },
+    in_progress: {
+      border: "#F59E0B",
+      bg: "#FFFBEB",
+      content: <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: "#F59E0B", display: "block" }} />,
+    },
+    completed: {
+      border: "#22C55E",
+      bg: "#F0FDF4",
+      content: <Check size={14} style={{ color: "#22C55E" }} strokeWidth={3} />,
+    },
+    cancelled: {
+      border: "#EF4444",
+      bg: "#FEF2F2",
+      content: <X size={14} style={{ color: "#EF4444" }} strokeWidth={3} />,
+    },
+  };
+  const c = config[status] ?? config.pending;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      disabled={disabled}
+      className="shrink-0 flex items-center justify-center rounded-full border-2 transition-colors"
+      style={{
+        width: 32,
+        height: 32,
+        borderColor: c.border,
+        backgroundColor: c.bg,
+      }}
+    >
+      {c.content}
+    </button>
+  );
+}
+
+/* ─── Carry-forward label helper ─── */
+function carryLabel(count: number): { text: string; color: string } | null {
+  if (count <= 0) return null;
+  const text = count === 1 ? "1 reunião" : `${count} reuniões`;
+  if (count > 3) return { text, color: "#EF4444" };
+  if (count >= 2) return { text, color: "#F59E0B" };
+  return { text, color: "#94A3B8" };
 }
 
 export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: Props) {
@@ -64,15 +108,13 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
   const qc = useQueryClient();
   const { options: assigneeOptions } = useAssigneeOptions();
 
-  // Notes state with debounce
+  /* ── Notes ── */
   const [notes, setNotes] = useState(occurrence.notes ?? "");
+  const [editingNotes, setEditingNotes] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const saveNotesNow = useCallback(async (value: string) => {
-    await supabase
-      .from("ritual_occurrences")
-      .update({ notes: value })
-      .eq("id", occurrence.id);
+    await supabase.from("ritual_occurrences").update({ notes: value }).eq("id", occurrence.id);
   }, [occurrence.id]);
 
   const handleNotesChange = (value: string) => {
@@ -85,16 +127,20 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, []);
 
-  // New item form
+  /* ── New item form ── */
   const [newTitle, setNewTitle] = useState("");
   const [newAssignee, setNewAssignee] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Expanded context cards
+  /* ── Expanded context ── */
   const [expandedContextId, setExpandedContextId] = useState<string | null>(null);
   const [contextInputs, setContextInputs] = useState<Record<string, string>>({});
 
-  // Fetch cards
+  /* ── Collapsible sections ── */
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [cancelledOpen, setCancelledOpen] = useState(false);
+
+  /* ── Fetch cards ── */
   const { data: cards = [], isLoading } = useQuery({
     queryKey: ["occurrence-cards", occurrence.id],
     queryFn: async () => {
@@ -109,7 +155,6 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
       const cardIds = rawCards.map((c) => c.id);
       const now = new Date();
 
-      // Assignees
       const assigneeMap = new Map<string, AssigneeInfo[]>();
       const { data: assigneeRows } = await supabase
         .from("card_assignees")
@@ -124,7 +169,6 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         assigneeMap.set(row.card_id, list);
       }
 
-      // History
       const historyMap = new Map<string, { firstSeen: string | null; count: number; lastNote: string | null }>();
       const { data: historyRows } = await supabase
         .from("task_history")
@@ -132,9 +176,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         .in("card_id", cardIds)
         .order("created_at", { ascending: true });
 
-      // Track which cards have history referencing previous occurrence (= carried)
       const carriedCardIds = new Set<string>();
-
       for (const row of historyRows ?? []) {
         if (previousOccurrenceId && row.ritual_occurrence_id === previousOccurrenceId) {
           carriedCardIds.add(row.card_id);
@@ -150,10 +192,12 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
 
       return rawCards.map((card): OccurrenceCard => {
         const d = card.end_date || card.start_date;
-        const is_overdue = card.status !== "completed" && (d ? new Date(d) < now : false);
+        const is_overdue = card.status !== "completed" && card.status !== "cancelled" && card.end_date
+          ? new Date(card.end_date) < now
+          : false;
         const history = historyMap.get(card.id);
         const isNewThisOcc = !carriedCardIds.has(card.id) && !previousOccurrenceId
-          ? true // first occurrence, everything is "new"
+          ? true
           : !carriedCardIds.has(card.id);
         return {
           ...card,
@@ -169,32 +213,29 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
     enabled: !!occurrence.id,
   });
 
-  // Summary
-  const carried = cards.filter((c) => !c.isNewThisOcc).length;
-  const completedCards = cards.filter((c) => c.status === "completed").length;
-  const newCards = cards.filter((c) => c.isNewThisOcc).length;
+  /* ── Categorize ── */
+  const pendingAndActive = cards.filter((c) => c.status === "pending" || c.status === "in_progress");
+  const completedCards = cards.filter((c) => c.status === "completed");
+  const cancelledCards = cards.filter((c) => c.status === "cancelled");
 
-  // Sort: active first, completed/cancelled at bottom
-  const activeCards = cards.filter((c) => c.status !== "completed" && c.status !== "cancelled");
-  const doneCards = cards.filter((c) => c.status === "completed" || c.status === "cancelled");
-
+  const carriedCount = cards.filter((c) => !c.isNewThisOcc).length;
+  const newCount = cards.filter((c) => c.isNewThisOcc).length;
   const isOpen = occurrence.status === "open";
 
-  // Mutations
+  /* ── Mutations ── */
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["occurrence-cards", occurrence.id] });
+    qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
+    qc.invalidateQueries({ queryKey: ["feed-cards"] });
+    qc.invalidateQueries({ queryKey: ["carry-forward"] });
+  };
+
   const updateCardStatus = useMutation({
     mutationFn: async ({ cardId, newStatus }: { cardId: string; newStatus: string }) => {
-      const { error } = await supabase
-        .from("cards")
-        .update({ status: newStatus })
-        .eq("id", cardId);
+      const { error } = await supabase.from("cards").update({ status: newStatus }).eq("id", cardId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["occurrence-cards", occurrence.id] });
-      qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
-      qc.invalidateQueries({ queryKey: ["feed-cards"] });
-      qc.invalidateQueries({ queryKey: ["carry-forward"] });
-    },
+    onSuccess: invalidateAll,
   });
 
   const addItem = useMutation({
@@ -210,7 +251,6 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
       }).select().single();
       if (error) throw error;
 
-      // Assign if selected
       if (newAssignee && card) {
         const opt = assigneeOptions.find((o) => o.id === newAssignee);
         if (opt?.type === "profile") {
@@ -225,10 +265,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
       setNewAssignee("");
       setShowAddForm(false);
       toast.success("Item adicionado");
-      qc.invalidateQueries({ queryKey: ["occurrence-cards", occurrence.id] });
-      qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
-      qc.invalidateQueries({ queryKey: ["feed-cards"] });
-      qc.invalidateQueries({ queryKey: ["carry-forward"] });
+      invalidateAll();
     },
   });
 
@@ -255,10 +292,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
 
   const closeOccurrence = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase
-        .from("ritual_occurrences")
-        .update({ status: "closed" })
-        .eq("id", occurrence.id);
+      const { error } = await supabase.from("ritual_occurrences").update({ status: "closed" }).eq("id", occurrence.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -270,247 +304,285 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
 
   const deleteOccurrence = useMutation({
     mutationFn: async () => {
-      // 1. Unlink cards
-      await supabase
-        .from("cards")
-        .update({ ritual_occurrence_id: null })
-        .eq("ritual_occurrence_id", occurrence.id);
-      // 2. Unlink task_history
-      await supabase
-        .from("task_history")
-        .update({ ritual_occurrence_id: null })
-        .eq("ritual_occurrence_id", occurrence.id);
-      // 3. Delete occurrence
-      const { error } = await supabase
-        .from("ritual_occurrences")
-        .delete()
-        .eq("id", occurrence.id);
+      await supabase.from("cards").update({ ritual_occurrence_id: null }).eq("ritual_occurrence_id", occurrence.id);
+      await supabase.from("task_history").update({ ritual_occurrence_id: null }).eq("ritual_occurrence_id", occurrence.id);
+      const { error } = await supabase.from("ritual_occurrences").delete().eq("id", occurrence.id);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Ocorrência excluída. As tarefas foram preservadas.");
-      qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
+      invalidateAll();
       qc.invalidateQueries({ queryKey: ["rituals"] });
-      qc.invalidateQueries({ queryKey: ["carry-forward"] });
-      qc.invalidateQueries({ queryKey: ["feed-cards"] });
     },
   });
 
   const handleStatusCycle = (card: OccurrenceCard) => {
     if (!isOpen) return;
     const currentIdx = STATUS_CYCLE.indexOf(card.status);
-    const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length];
-    updateCardStatus.mutate({ cardId: card.id, newStatus: nextStatus });
+    const nextIdx = (currentIdx + 1) % STATUS_CYCLE.length;
+    updateCardStatus.mutate({ cardId: card.id, newStatus: STATUS_CYCLE[nextIdx] });
   };
 
+  /* ── Render a single item card ── */
   const renderCard = (card: OccurrenceCard) => {
-    const displayStatus = card.is_overdue && card.status === "pending" ? "overdue" : card.status;
-    const color = STATUS_COLORS[displayStatus] ?? STATUS_COLORS.pending;
     const isCompleted = card.status === "completed";
-    const isNotDone = card.status === "not_done";
     const isCancelled = card.status === "cancelled";
+    const isDimmed = isCompleted || isCancelled;
     const assignee = card.assignees[0];
     const sinceStr = card.firstSeen
       ? format(new Date(card.firstSeen), "MMM/yy", { locale: ptBR })
       : null;
+    const isExpanded = expandedContextId === card.id;
+
+    // Build meta line
+    const metaParts: React.ReactNode[] = [];
+    if (card.isNewThisOcc) {
+      metaParts.push(
+        <span key="new" style={{ color: "#4F46E5", fontWeight: 500 }}>novo</span>
+      );
+    } else {
+      const cl = carryLabel(card.historyCount);
+      if (sinceStr) {
+        metaParts.push(
+          <span key="since" style={{ color: cl?.color ?? "#6B6B6B" }}>
+            desde {sinceStr}
+          </span>
+        );
+      }
+      if (cl) {
+        metaParts.push(
+          <span key="count" style={{ color: cl.color }}>{cl.text}</span>
+        );
+      }
+    }
+    if (assignee?.full_name) {
+      metaParts.push(<span key="assignee">{assignee.full_name}</span>);
+    }
 
     return (
       <div
         key={card.id}
-        className={`bg-card border border-border rounded-lg p-3 ${isCompleted ? "opacity-70" : ""} ${isCancelled ? "opacity-50" : ""}`}
+        style={{
+          border: "0.5px solid #EEEEE9",
+          borderRadius: 10,
+          padding: 12,
+          backgroundColor: "#fff",
+        }}
       >
         <div className="flex items-start gap-3">
           {/* Status circle */}
-          <button
+          <StatusCircle
+            status={card.status}
             onClick={() => handleStatusCycle(card)}
             disabled={!isOpen}
-            className="shrink-0 mt-0.5 flex items-center justify-center"
-            style={{ width: 28, height: 28 }}
+          />
+
+          {/* Content area — tappable to toggle observation */}
+          <div
+            className="flex-1 min-w-0 cursor-pointer"
+            onClick={() => {
+              if (!isOpen) { navigate(`/app/task/${card.id}`); return; }
+              setExpandedContextId(isExpanded ? null : card.id);
+            }}
           >
-            <div
-              className="rounded-full border-2 flex items-center justify-center transition-colors"
+            {/* Line 1 — Title */}
+            <p
+              className="text-sm leading-snug"
               style={{
-                width: 24,
-                height: 24,
-                borderColor: color,
-                backgroundColor: isCompleted || isNotDone || isCancelled ? color : "transparent",
+                fontWeight: 500,
+                color: isDimmed ? "#94A3B8" : "#1A1A1A",
+                textDecoration: isDimmed ? "line-through" : "none",
+                opacity: isCancelled ? 0.6 : 1,
               }}
             >
-              {isCompleted && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2.5 6L5 8.5L9.5 3.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-              {isNotDone && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M3 3L9 9M9 3L3 9" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              )}
-              {isCancelled && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M3 3L9 9M9 3L3 9" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              )}
-            </div>
-          </button>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <button
-              onClick={() => navigate(`/app/task/${card.id}`)}
-              className="text-left w-full"
-            >
-              <p className={`text-[13px] font-medium text-foreground truncate ${isCompleted ? "line-through" : ""} ${isCancelled ? "line-through" : ""}`}>
-                {card.title}
-              </p>
-            </button>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {card.isNewThisOcc ? (
-                <span className="text-primary font-medium">novo nesta ocorrência</span>
-              ) : (
-                <>
-                  {sinceStr && (
-                    <span style={{ color: card.historyCount >= 3 ? STATUS_COLORS.overdue : card.historyCount >= 2 ? STATUS_COLORS.in_progress : undefined }}>
-                      desde {sinceStr}
-                    </span>
-                  )}
-                  {sinceStr && card.historyCount > 0 && " · "}
-                  {card.historyCount > 0 && `${card.historyCount} ocorrência${card.historyCount !== 1 ? "s" : ""}`}
-                </>
-              )}
-              {assignee && (
-                <>
-                  {" · "}
-                  {assignee.full_name ?? "Sem nome"}
-                </>
-              )}
+              {card.title}
             </p>
 
-            {/* Last context note */}
-            {card.lastContextNote && (
-              <div className="mt-1.5 bg-muted/50 rounded px-2 py-1">
-                <p className="text-[10px] text-muted-foreground italic">{card.lastContextNote}</p>
+            {/* Line 2 — Meta */}
+            {metaParts.length > 0 && (
+              <p className="mt-0.5 flex items-center gap-0 flex-wrap" style={{ fontSize: 11, color: "#6B6B6B" }}>
+                {metaParts.map((part, i) => (
+                  <span key={i} className="flex items-center">
+                    {i > 0 && <span className="mx-1">·</span>}
+                    {part}
+                  </span>
+                ))}
+              </p>
+            )}
+
+            {/* Line 3 — Last context note */}
+            {card.lastContextNote && !isExpanded && (
+              <div
+                className="mt-1.5 rounded-md px-2 py-1.5"
+                style={{ backgroundColor: "#F4F4F1", borderRadius: 6 }}
+              >
+                <p className="text-xs italic" style={{ color: "#6B6B6B" }}>
+                  {card.lastContextNote}
+                </p>
               </div>
             )}
 
-            {/* Expandable context input */}
-            {isOpen && (
-              <>
-                {expandedContextId === card.id ? (
-                  <div className="mt-2 space-y-1.5">
-                    <Textarea
-                      placeholder="Adicionar observação..."
-                      className="text-xs resize-none min-h-[60px]"
-                      value={contextInputs[card.id] ?? ""}
-                      onChange={(e) =>
-                        setContextInputs((prev) => ({ ...prev, [card.id]: e.target.value }))
-                      }
-                      autoFocus
-                    />
-                    <div className="flex gap-1.5 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[10px] px-2"
-                        onClick={() => setExpandedContextId(null)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-6 text-[10px] px-2 bg-primary"
-                        onClick={() => {
-                          if (contextInputs[card.id]?.trim()) {
-                            addContextNote.mutate({ cardId: card.id, note: contextInputs[card.id].trim() });
-                          }
-                        }}
-                        disabled={!contextInputs[card.id]?.trim()}
-                      >
-                        Salvar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setExpandedContextId(card.id)}
-                    className="text-[10px] text-primary mt-1.5 flex items-center gap-0.5"
+            {/* Expandable observation input */}
+            {isOpen && isExpanded && (
+              <div className="mt-2 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                <Textarea
+                  placeholder="Adicionar observação..."
+                  className="text-xs resize-none min-h-[60px]"
+                  value={contextInputs[card.id] ?? ""}
+                  onChange={(e) =>
+                    setContextInputs((prev) => ({ ...prev, [card.id]: e.target.value }))
+                  }
+                  autoFocus
+                />
+                <div className="flex gap-1.5 justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] px-2"
+                    onClick={() => setExpandedContextId(null)}
                   >
-                    <ChevronDown size={10} /> Observação
-                  </button>
-                )}
-              </>
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-6 text-[10px] px-2 bg-primary"
+                    onClick={() => {
+                      if (contextInputs[card.id]?.trim()) {
+                        addContextNote.mutate({ cardId: card.id, note: contextInputs[card.id].trim() });
+                      }
+                    }}
+                    disabled={!contextInputs[card.id]?.trim()}
+                  >
+                    Salvar
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
-
-          {/* Avatar */}
-          {assignee && (
-            <Avatar className="h-6 w-6 shrink-0 mt-0.5">
-              <AvatarImage src={assignee.avatar_url ?? undefined} />
-              <AvatarFallback className="text-[9px]">
-                {(assignee.full_name ?? "?").charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          )}
         </div>
       </div>
     );
   };
 
+  /* ── Summary text ── */
+  const summaryParts: string[] = [];
+  if (carriedCount > 0) summaryParts.push(`${carriedCount} ite${carriedCount !== 1 ? "ns" : "m"} puxado${carriedCount !== 1 ? "s" : ""}`);
+  if (newCount > 0) summaryParts.push(`${newCount} novo${newCount !== 1 ? "s" : ""}`);
+  if (completedCards.length > 0) summaryParts.push(`${completedCards.length} concluído${completedCards.length !== 1 ? "s" : ""}`);
+  if (cancelledCards.length > 0) summaryParts.push(`${cancelledCards.length} cancelado${cancelledCards.length !== 1 ? "s" : ""}`);
+  const summaryText = carriedCount === 0 && newCount > 0
+    ? "Todos os itens são novos nesta ocorrência"
+    : summaryParts.join(" · ") || "Nenhum item";
+
   return (
     <div className="space-y-3 pb-4">
-      {/* Section 1 — Summary */}
-      <div className="bg-primary/5 border border-primary/10 rounded-lg px-3 py-2.5">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] text-foreground font-medium">
-            {carried > 0 && `${carried} puxado${carried !== 1 ? "s" : ""}`}
-            {carried > 0 && completedCards > 0 && " · "}
-            {completedCards > 0 && `${completedCards} concluído${completedCards !== 1 ? "s" : ""}`}
-            {(carried > 0 || completedCards > 0) && newCards > 0 && " · "}
-            {newCards > 0 && `${newCards} novo${newCards !== 1 ? "s" : ""}`}
-            {carried === 0 && completedCards === 0 && newCards === 0 && "Nenhum item"}
-          </p>
-          <span className="text-[10px] text-muted-foreground">
-            {format(new Date(occurrence.date), "d MMM yyyy", { locale: ptBR })}
-          </span>
+      {/* ── Meeting Notes ── */}
+      {isOpen ? (
+        <div
+          className="rounded-r-lg p-3"
+          style={{
+            borderLeft: notes.trim() ? "3px solid #4F46E5" : "3px solid #CBD5E1",
+            backgroundColor: notes.trim() ? "#EEF2FF" : "#F8FAFC",
+          }}
+        >
+          <Textarea
+            placeholder="Registre decisões e observações da reunião aqui..."
+            value={notes}
+            onChange={(e) => handleNotesChange(e.target.value)}
+            className="text-xs resize-none bg-transparent border-none p-0 focus-visible:ring-0 min-h-[80px] placeholder:text-muted-foreground/70"
+          />
         </div>
+      ) : notes.trim() ? (
+        <div
+          className="rounded-r-lg p-3"
+          style={{ borderLeft: "3px solid #4F46E5", backgroundColor: "#EEF2FF" }}
+        >
+          <p className="text-xs whitespace-pre-wrap" style={{ color: "#1A1A1A" }}>{notes}</p>
+        </div>
+      ) : null}
+
+      {/* ── Summary Card ── */}
+      <div
+        className="rounded-lg px-3 py-2"
+        style={{ backgroundColor: "#EEF2FF", borderRadius: 8 }}
+      >
+        <p className="text-xs font-medium" style={{ color: "#4F46E5" }}>
+          {summaryText}
+        </p>
+        <span className="text-[10px]" style={{ color: "#6B6B6B" }}>
+          {format(new Date(occurrence.date), "d MMM yyyy", { locale: ptBR })}
+        </span>
       </div>
 
-      {/* Section 2 — Meeting notes */}
-      <div className="border-l-[3px] border-primary rounded-r-lg bg-primary/5 p-3">
-        <p className="text-[11px] font-medium text-foreground mb-1.5">Notas da reunião</p>
-        <Textarea
-          placeholder="Registre decisões, observações e contexto..."
-          value={notes}
-          onChange={(e) => handleNotesChange(e.target.value)}
-          className="text-xs resize-none bg-transparent border-none p-0 focus-visible:ring-0 min-h-[120px]"
-          disabled={!isOpen}
-        />
-      </div>
-
-      {/* Section 3 — Items */}
+      {/* ── Items ── */}
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Carregando...</p>
       ) : cards.length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-4">Nenhum item nesta ocorrência</p>
       ) : (
-        <div className="space-y-1.5">
-          {activeCards.map(renderCard)}
-          {doneCards.length > 0 && (
-            <>
-              <p className="text-[10px] text-muted-foreground pt-2 pb-1 font-medium">
-                Concluídos ({doneCards.length})
+        <div className="space-y-3">
+          {/* Active items */}
+          {pendingAndActive.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                Pendentes e em andamento ({pendingAndActive.length})
               </p>
-              {doneCards.map(renderCard)}
-            </>
+              <div className="space-y-1">
+                {pendingAndActive.map(renderCard)}
+              </div>
+            </div>
+          )}
+
+          {/* Completed — collapsible, closed by default */}
+          {completedCards.length > 0 && (
+            <Collapsible open={doneOpen} onOpenChange={setDoneOpen}>
+              <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform text-muted-foreground ${doneOpen ? "rotate-180" : ""}`}
+                />
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Concluídos nesta ({completedCards.length})
+                </p>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-1 mt-1.5">
+                  {completedCards.map(renderCard)}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Cancelled — collapsible, closed by default */}
+          {cancelledCards.length > 0 && (
+            <Collapsible open={cancelledOpen} onOpenChange={setCancelledOpen}>
+              <CollapsibleTrigger className="flex items-center gap-1 w-full text-left">
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform text-muted-foreground ${cancelledOpen ? "rotate-180" : ""}`}
+                />
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Cancelados ({cancelledCards.length})
+                </p>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-1 mt-1.5">
+                  {cancelledCards.map(renderCard)}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
         </div>
       )}
 
-      {/* Add new item */}
+      {/* ── Add new item ── */}
       {isOpen && (
         <>
           {showAddForm ? (
-            <div className="bg-card border border-border rounded-lg p-3 space-y-2">
+            <div
+              className="rounded-lg p-3 space-y-2"
+              style={{ border: "0.5px solid #EEEEE9", backgroundColor: "#fff" }}
+            >
               <Input
                 placeholder="Título do item..."
                 className="h-8 text-xs"
@@ -523,14 +595,21 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
                   <SelectValue placeholder="Responsável (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {assigneeOptions.map((opt) => (
-                    <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                      {opt.full_name}
-                      {opt.type === "contact" && (
-                        <span className="text-muted-foreground ml-1">(contato)</span>
-                      )}
+                  {user && (
+                    <SelectItem value={user.id} className="text-xs font-medium">
+                      Eu mesmo
                     </SelectItem>
-                  ))}
+                  )}
+                  {assigneeOptions
+                    .filter((o) => o.id !== user?.id)
+                    .map((opt) => (
+                      <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                        {opt.full_name}
+                        {opt.type === "contact" && (
+                          <span className="text-muted-foreground ml-1">(contato)</span>
+                        )}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <div className="flex gap-1.5 justify-end">
@@ -565,7 +644,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         </>
       )}
 
-      {/* Close / Delete occurrence */}
+      {/* ── Close / Delete ── */}
       {isOpen && (
         <div className="flex gap-2">
           <Button
@@ -579,11 +658,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs text-destructive hover:text-destructive"
-              >
+              <Button variant="ghost" size="sm" className="text-xs text-destructive hover:text-destructive">
                 <Trash2 size={12} className="mr-1" /> Excluir
               </Button>
             </AlertDialogTrigger>
