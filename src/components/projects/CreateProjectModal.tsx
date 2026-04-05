@@ -1,10 +1,14 @@
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
+import { CalendarIcon, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -13,7 +17,7 @@ type Profile = { id: string; full_name: string | null; avatar_url: string | null
 interface Props {
   open: boolean;
   onClose: () => void;
-  onCreate: (input: { name: string; description?: string; memberIds?: string[] }) => void;
+  onCreate: (input: { name: string; description?: string; target_date?: string; memberIds?: string[] }) => void;
   loading?: boolean;
 }
 
@@ -21,6 +25,7 @@ export default function CreateProjectModal({ open, onClose, onCreate, loading }:
   const { user } = useAuth();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
   const [selectedMembers, setSelectedMembers] = useState<Profile[]>([]);
   const [search, setSearch] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -45,10 +50,12 @@ export default function CreateProjectModal({ open, onClose, onCreate, loading }:
     onCreate({
       name: name.trim(),
       description: description.trim() || undefined,
+      target_date: targetDate ? format(targetDate, "yyyy-MM-dd") : undefined,
       memberIds: selectedMembers.map((m) => m.id),
     });
     setName("");
     setDescription("");
+    setTargetDate(undefined);
     setSelectedMembers([]);
     setSearch("");
     onClose();
@@ -74,13 +81,40 @@ export default function CreateProjectModal({ open, onClose, onCreate, loading }:
             rows={2}
           />
 
+          {/* Target date */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Prazo estimado</label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal text-sm h-9",
+                    !targetDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon size={14} className="mr-2" />
+                  {targetDate ? format(targetDate, "dd/MM/yyyy") : "Sem prazo"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={targetDate}
+                  onSelect={setTargetDate}
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
           {/* Selected members */}
           {selectedMembers.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {selectedMembers.map((m) => (
                 <span
                   key={m.id}
-                  className="flex items-center gap-1 text-xs bg-[#F4F4F1] rounded-full px-2 py-1"
+                  className="flex items-center gap-1 text-xs bg-accent rounded-full px-2 py-1"
                 >
                   {(m.full_name ?? "?").split(" ")[0]}
                   <button onClick={() => setSelectedMembers((s) => s.filter((x) => x.id !== m.id))}>

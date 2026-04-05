@@ -10,33 +10,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Progress } from "@/components/ui/progress";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
-  ArrowLeft, Plus, Pencil, Check, X, UserPlus, Trash2,
+  ArrowLeft, Plus, Pencil, Check, X, UserPlus, Trash2, CalendarIcon, Video,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { format, differenceInDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import type { EnrichedProject, ProjectMember } from "@/hooks/useProjects";
+import type { EnrichedFeedCard } from "@/hooks/useFeedCards";
+import CreateMeetingModal from "@/components/projects/CreateMeetingModal";
 
-const STATUS_BADGE: Record<string, { label: string; className: string }> = {
-  active: { label: "Ativo", className: "bg-[#22C55E]/10 text-[#22C55E] border-none" },
-  completed: { label: "Concluído", className: "bg-[#3B82F6]/10 text-[#3B82F6] border-none" },
-  archived: { label: "Arquivado", className: "bg-[#94A3B8]/10 text-[#94A3B8] border-none" },
-};
+const STATUS_OPTIONS = [
+  { value: "active", label: "Ativo", className: "bg-primary text-primary-foreground" },
+  { value: "completed", label: "Concluído", className: "bg-[#22C55E] text-white" },
+  { value: "archived", label: "Arquivado", className: "bg-muted text-muted-foreground" },
+];
 
 const COUNTER_CARDS = [
   { key: "total" as const, label: "Total", color: "#94A3B8" },
   { key: "overdue" as const, label: "Atrasadas", color: "#EF4444" },
   { key: "in_progress" as const, label: "Em andamento", color: "#3B82F6" },
   { key: "completed" as const, label: "Concluídas", color: "#22C55E" },
+];
+
+type TaskFilter = "all" | "open" | "completed" | "overdue";
+
+const TASK_FILTERS: { key: TaskFilter; label: string }[] = [
+  { key: "all", label: "Todas" },
+  { key: "open", label: "Abertas" },
+  { key: "completed", label: "Concluídas" },
+  { key: "overdue", label: "Atrasadas" },
 ];
 
 export default function ProjectDetailPage() {
@@ -49,35 +60,52 @@ export default function ProjectDetailPage() {
 
   const project = projects.find((p) => p.id === id);
 
-  // Editable name
+  // State
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
-
-  // New task form
+  const [descDraft, setDescDraft] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDate, setNewDate] = useState<Date>(new Date());
-
-  // Add member
   const [memberSearch, setMemberSearch] = useState("");
   const [allProfiles, setAllProfiles] = useState<ProjectMember[]>([]);
   const [showMemberSearch, setShowMemberSearch] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>("all");
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
 
   const isCreator = project?.created_by === user?.id;
   const isLeader = profile?.role === "leader";
   const canEdit = isCreator || isLeader;
 
-  // Project tasks
+  // Initialize description draft
+  if (project && descDraft === null) {
+    setDescDraft(project.description ?? "");
+  }
+
+  // Project cards (tasks + meetings)
   const projectCards = useMemo(
     () => allCards.filter((c) => c.project_id === id),
     [allCards, id]
   );
 
-  // Counts from project cards (real-time from feed data)
+  const tasks = useMemo(() => projectCards.filter((c) => c.card_type !== "meeting"), [projectCards]);
+  const meetings = useMemo(() => projectCards.filter((c) => c.card_type === "meeting"), [projectCards]);
+
+  // Filtered tasks
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((card) => {
+      if (taskFilter === "all") return true;
+      if (taskFilter === "open") return card.status !== "completed";
+      if (taskFilter === "completed") return card.status === "completed";
+      if (taskFilter === "overdue") return card.is_overdue;
+      return true;
+    });
+  }, [tasks, taskFilter]);
+
+  // Counts
   const counts = useMemo(() => {
-    const now = new Date();
     const c = { total: 0, pending: 0, in_progress: 0, completed: 0, overdue: 0 };
-    for (const card of projectCards) {
+    for (const card of tasks) {
       c.total++;
       if (card.status === "completed") c.completed++;
       else if (card.status === "in_progress") c.in_progress++;
@@ -85,17 +113,22 @@ export default function ProjectDetailPage() {
       if (card.is_overdue) c.overdue++;
     }
     return c;
-  }, [projectCards]);
+  }, [tasks]);
 
   const pctCompleted = counts.total > 0 ? (counts.completed / counts.total) * 100 : 0;
   const pctInProgress = counts.total > 0 ? (counts.in_progress / counts.total) * 100 : 0;
   const pctOverdue = counts.total > 0 ? (counts.overdue / counts.total) * 100 : 0;
 
-  // Discussed in — ritual occurrences that have cards with this project_id
+  // Target date logic
+  const targetOverdueDays = project?.target_date && project.status === "active"
+    ? differenceInDays(new Date(), parseISO(project.target_date))
+    : 0;
+  const isTargetOverdue = targetOverdueDays > 0;
+
+  // Discussed in
   const { data: discussedIn = [] } = useQuery({
     queryKey: ["project-discussed-in", id],
     queryFn: async () => {
-      // Find cards for this project that have ritual_occurrence_id
       const { data: cards } = await supabase
         .from("cards")
         .select("ritual_occurrence_id")
@@ -120,7 +153,7 @@ export default function ProjectDetailPage() {
     enabled: !!id,
   });
 
-  // Create task linked to project
+  // Create task
   const createTaskMutation = useMutation({
     mutationFn: async () => {
       if (!user || !id) throw new Error("Erro");
@@ -144,6 +177,56 @@ export default function ProjectDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Create meeting
+  const createMeetingMutation = useMutation({
+    mutationFn: async (input: {
+      title: string;
+      description?: string;
+      start_date: string;
+      assignee_profile_ids: string[];
+      assignee_contact_ids: string[];
+    }) => {
+      if (!user || !id) throw new Error("Erro");
+      const { data, error } = await supabase
+        .from("cards")
+        .insert({
+          title: input.title,
+          description: input.description ?? null,
+          start_date: input.start_date,
+          card_type: "meeting",
+          origin_type: "project",
+          project_id: id,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+
+      const inserts: PromiseLike<unknown>[] = [];
+      if (input.assignee_profile_ids.length > 0) {
+        inserts.push(
+          supabase.from("card_assignees").insert(
+            input.assignee_profile_ids.map((pid) => ({ card_id: data.id, profile_id: pid }))
+          )
+        );
+      }
+      if (input.assignee_contact_ids.length > 0) {
+        inserts.push(
+          supabase.from("card_contact_assignees").insert(
+            input.assignee_contact_ids.map((cid) => ({ card_id: data.id, contact_id: cid }))
+          )
+        );
+      }
+      if (inserts.length > 0) await Promise.all(inserts);
+    },
+    onSuccess: () => {
+      toast.success("Reunião criada");
+      qc.invalidateQueries({ queryKey: ["feed-cards"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const loadProfiles = async () => {
     const { data } = await supabase.from("profiles").select("id, full_name, avatar_url");
     setAllProfiles(data ?? []);
@@ -157,6 +240,14 @@ export default function ProjectDetailPage() {
       (p.full_name ?? "").toLowerCase().includes(memberSearch.toLowerCase())
   );
 
+  const handleSaveDesc = () => {
+    if (!project) return;
+    const val = (descDraft ?? "").trim() || null;
+    if (val !== (project.description ?? null)) {
+      updateProject.mutate({ id: project.id, description: val ?? undefined });
+    }
+  };
+
   if (!project) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
@@ -168,7 +259,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const badge = STATUS_BADGE[project.status] ?? STATUS_BADGE.active;
+  const currentStatusOpt = STATUS_OPTIONS.find((s) => s.value === project.status) ?? STATUS_OPTIONS[0];
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -209,12 +300,86 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        <Badge className={`text-[10px] px-1.5 py-0 h-4 font-medium shrink-0 ${badge.className}`}>
-          {badge.label}
-        </Badge>
+        {/* Status selector */}
+        {canEdit ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${currentStatusOpt.className}`}>
+                {currentStatusOpt.label}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-36 p-1" align="end">
+              {STATUS_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => updateProject.mutate({ id: project.id, status: s.value })}
+                  className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent ${project.status === s.value ? "font-semibold" : ""}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <Badge className={`text-[10px] px-1.5 py-0 h-4 font-medium shrink-0 ${currentStatusOpt.className}`}>
+            {currentStatusOpt.label}
+          </Badge>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4 pt-3">
+        {/* Description */}
+        {canEdit ? (
+          <textarea
+            value={descDraft ?? ""}
+            onChange={(e) => setDescDraft(e.target.value)}
+            onBlur={handleSaveDesc}
+            placeholder="Adicionar descrição..."
+            className="w-full text-[13px] text-foreground bg-transparent resize-none outline-none min-h-[40px] placeholder:text-muted-foreground"
+          />
+        ) : project.description ? (
+          <p className="text-[13px] text-foreground whitespace-pre-wrap">{project.description}</p>
+        ) : null}
+
+        {/* Target date */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Prazo:</span>
+          {canEdit ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                  <CalendarIcon size={12} />
+                  {project.target_date
+                    ? format(parseISO(project.target_date), "dd/MM/yyyy")
+                    : "Sem prazo"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={project.target_date ? parseISO(project.target_date) : undefined}
+                  onSelect={(d) =>
+                    updateProject.mutate({
+                      id: project.id,
+                      target_date: d ? format(d, "yyyy-MM-dd") : null,
+                    })
+                  }
+                  className={cn("p-3 pointer-events-auto")}
+                />
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <span className="text-xs">
+              {project.target_date ? format(parseISO(project.target_date), "dd/MM/yyyy") : "—"}
+            </span>
+          )}
+          {isTargetOverdue && (
+            <span className="text-xs text-destructive font-medium">
+              Prazo vencido há {targetOverdueDays} dia{targetOverdueDays > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+
         {/* Counter cards */}
         <div className="grid grid-cols-2 gap-2">
           {COUNTER_CARDS.map((c) => (
@@ -231,7 +396,7 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* Multi-color progress bar */}
-        <div className="w-full h-2 rounded-full bg-[#E2E8F0] overflow-hidden flex">
+        <div className="w-full h-2 rounded-full bg-muted overflow-hidden flex">
           {pctCompleted > 0 && (
             <div style={{ width: `${pctCompleted}%`, backgroundColor: "#22C55E" }} />
           )}
@@ -243,15 +408,92 @@ export default function ProjectDetailPage() {
           )}
         </div>
 
-        {/* Tasks */}
+        {/* Tasks with filter */}
         <div>
-          <h2 className="text-sm font-medium text-foreground mb-2">Tarefas</h2>
-          {projectCards.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhuma tarefa vinculada</p>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-medium text-foreground">Tarefas</h2>
+          </div>
+          <div className="flex items-center gap-1.5 mb-2 overflow-x-auto no-scrollbar">
+            {TASK_FILTERS.map((f) => {
+              const active = taskFilter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setTaskFilter(f.key)}
+                  className={`shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors ${
+                    active ? "bg-primary text-primary-foreground" : "bg-accent text-muted-foreground"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+          {filteredTasks.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma tarefa</p>
           ) : (
             <div className="space-y-2">
-              {projectCards.map((card) => (
+              {filteredTasks.map((card) => (
                 <FeedCard key={card.id} card={card} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Meetings */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-medium text-foreground">Reuniões</h2>
+            {canEdit && (
+              <button
+                onClick={() => setShowMeetingModal(true)}
+                className="text-primary flex items-center gap-1 text-xs font-medium"
+              >
+                <Plus size={14} /> Reunião
+              </button>
+            )}
+          </div>
+          {meetings.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma reunião</p>
+          ) : (
+            <div className="space-y-2">
+              {meetings.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => navigate(`/app/task/${m.id}`)}
+                  className="w-full text-left bg-card border border-border rounded-xl p-3 transition-shadow hover:shadow-md"
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Badge className="text-[10px] px-1.5 py-0 h-4 font-medium bg-[#22C55E]/10 text-[#22C55E] border-none">
+                      <Video size={10} className="mr-0.5" /> Reunião
+                    </Badge>
+                    <span className="ml-auto text-[11px] text-muted-foreground">
+                      {format(new Date(m.start_date), "dd/MM · HH:mm")}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-foreground truncate">{m.title}</p>
+                  {m.assignees.length > 0 && (
+                    <div className="flex items-center mt-1.5">
+                      {m.assignees.slice(0, 3).map((a, i) => (
+                        <Avatar
+                          key={a.id}
+                          className="h-5 w-5 border-2 border-card"
+                          style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 3 - i }}
+                        >
+                          <AvatarImage src={a.avatar_url ?? undefined} />
+                          <AvatarFallback className="text-[8px] bg-muted">
+                            {(a.full_name ?? "?").charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {m.assignees.length > 3 && (
+                        <span className="text-[9px] text-muted-foreground ml-1">
+                          +{m.assignees.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </button>
               ))}
             </div>
           )}
@@ -414,6 +656,7 @@ export default function ProjectDetailPage() {
                   selected={newDate}
                   onSelect={(d) => d && setNewDate(d)}
                   locale={ptBR}
+                  className={cn("p-3 pointer-events-auto")}
                 />
               </PopoverContent>
             </Popover>
@@ -435,6 +678,14 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Meeting modal */}
+      <CreateMeetingModal
+        open={showMeetingModal}
+        onClose={() => setShowMeetingModal(false)}
+        onCreate={(input) => createMeetingMutation.mutate(input)}
+        loading={createMeetingMutation.isPending}
+      />
     </div>
   );
 }

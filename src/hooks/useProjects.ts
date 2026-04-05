@@ -23,6 +23,7 @@ export type ProjectCounts = {
 export type EnrichedProject = Project & {
   members: ProjectMember[];
   counts: ProjectCounts;
+  target_date: string | null;
 };
 
 export function useProjects() {
@@ -33,7 +34,6 @@ export function useProjects() {
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
     queryFn: async () => {
-      // 1. Fetch projects (RLS already filters by creator/member)
       const { data: rawProjects, error } = await supabase
         .from("projects")
         .select("*")
@@ -43,7 +43,6 @@ export function useProjects() {
 
       const projectIds = rawProjects.map((p) => p.id);
 
-      // 2. Fetch members for all projects
       const memberMap = new Map<string, ProjectMember[]>();
       const countsMap = new Map<string, ProjectCounts>();
 
@@ -65,7 +64,6 @@ export function useProjects() {
           })
       );
 
-      // 3. Fetch card counts per project
       promises.push(
         supabase
           .from("cards")
@@ -99,6 +97,7 @@ export function useProjects() {
 
       return rawProjects.map((proj): EnrichedProject => ({
         ...proj,
+        target_date: (proj as any).target_date ?? null,
         members: memberMap.get(proj.id) ?? [],
         counts: countsMap.get(proj.id) ?? {
           total: 0, pending: 0, in_progress: 0, completed: 0, overdue: 0,
@@ -109,11 +108,16 @@ export function useProjects() {
   });
 
   const createProject = useMutation({
-    mutationFn: async (input: { name: string; description?: string; memberIds?: string[] }) => {
+    mutationFn: async (input: { name: string; description?: string; target_date?: string; memberIds?: string[] }) => {
       if (!user) throw new Error("Não autenticado");
       const { data, error } = await supabase
         .from("projects")
-        .insert({ name: input.name, description: input.description ?? null, created_by: user.id })
+        .insert({
+          name: input.name,
+          description: input.description ?? null,
+          created_by: user.id,
+          ...(input.target_date ? { target_date: input.target_date } : {}),
+        } as any)
         .select()
         .single();
       if (error) throw error;
@@ -130,12 +134,13 @@ export function useProjects() {
   });
 
   const updateProject = useMutation({
-    mutationFn: async (input: { id: string; name?: string; description?: string; status?: string }) => {
+    mutationFn: async (input: { id: string; name?: string; description?: string; status?: string; target_date?: string | null }) => {
       const updates: Record<string, unknown> = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.description !== undefined) updates.description = input.description;
       if (input.status !== undefined) updates.status = input.status;
-      const { error } = await supabase.from("projects").update(updates).eq("id", input.id);
+      if (input.target_date !== undefined) updates.target_date = input.target_date;
+      const { error } = await supabase.from("projects").update(updates as any).eq("id", input.id);
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Projeto atualizado"); },
