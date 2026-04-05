@@ -136,12 +136,14 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
       </div>
 
       {/* Line 3: Meta info */}
-      {metaItems.length > 0 && (
-        <p className="mt-1 text-[11px]" style={{ color: "#6B6B6B" }}>
-          {metaItems.join(" · ")}
-          {card.checklist_total > 0 && (
-            <> · <CheckSquare size={10} className="inline -mt-px" /> {card.checklist_done}/{card.checklist_total}</>
-          )}
+      {metaParts.length > 0 && (
+        <p className="mt-1 text-[11px] flex items-center gap-1 flex-wrap" style={{ color: "#6B6B6B" }}>
+          {metaParts.map((part, i) => (
+            <span key={i} className="flex items-center gap-0.5">
+              {i > 0 && <span className="mx-0.5">·</span>}
+              {part}
+            </span>
+          ))}
         </p>
       )}
 
