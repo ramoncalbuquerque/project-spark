@@ -16,7 +16,7 @@ export default function RitualCard({ ritual }: { ritual: EnrichedRitual }) {
   return (
     <button
       onClick={() => navigate(`/app/ritual/${ritual.id}`)}
-      className="w-full text-left bg-white border border-[hsl(var(--border))] rounded-xl p-4 space-y-2"
+      className="w-full text-left bg-card border border-border rounded-xl p-4 space-y-2"
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">

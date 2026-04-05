@@ -71,7 +71,7 @@ export default function CreateRitualModal({ open, onClose, onCreate, loading }: 
           {selectedMembers.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {selectedMembers.map((m) => (
-                <span key={m.id} className="flex items-center gap-1 text-xs bg-[#F4F4F1] rounded-full px-2 py-1">
+                <span key={m.id} className="flex items-center gap-1 text-xs bg-accent rounded-full px-2 py-1">
                   {(m.full_name ?? "?").split(" ")[0]}
                   <button onClick={() => setSelectedMembers((s) => s.filter((x) => x.id !== m.id))}>
                     <X size={12} className="text-muted-foreground" />
@@ -100,7 +100,7 @@ export default function CreateRitualModal({ open, onClose, onCreate, loading }: 
             </div>
           )}
 
-          <Button className="w-full bg-[#4F46E5] hover:bg-[#4338CA]" onClick={handleCreate} disabled={!name.trim() || loading}>
+          <Button className="w-full bg-primary hover:bg-primary/90" onClick={handleCreate} disabled={!name.trim() || loading}>
             Criar Ritualística
           </Button>
         </div>

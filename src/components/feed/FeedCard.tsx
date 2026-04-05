@@ -89,7 +89,7 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
               e.stopPropagation();
               navigate(`/app/project/${card.project_id}`);
             }}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-[hsl(239_84%_67%/0.1)] text-[#4F46E5] font-medium hover:bg-[hsl(239_84%_67%/0.2)] transition-colors"
+            className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors"
           >
             @{card.project_name}
           </button>

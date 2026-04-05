@@ -36,9 +36,9 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
 
   if (!expanded) {
     return (
-      <div className="sticky bottom-14 z-10 px-4 pb-2 pt-1 bg-gradient-to-t from-[#FAFAF8] via-[#FAFAF8] to-transparent">
+      <div className="sticky bottom-14 z-10 px-4 pb-2 pt-1 bg-gradient-to-t from-background via-background to-transparent">
         <div
-          className="flex items-center gap-2 h-11 rounded-3xl bg-[#F4F4F1] px-4 cursor-text border border-[hsl(var(--border))]"
+          className="flex items-center gap-2 h-11 rounded-3xl bg-accent px-4 cursor-text border border-border"
           onClick={() => {
             setExpanded(true);
             setTimeout(() => inputRef.current?.focus(), 50);
@@ -52,8 +52,8 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
   }
 
   return (
-    <div className="sticky bottom-14 z-10 px-4 pb-2 pt-1 bg-gradient-to-t from-[#FAFAF8] via-[#FAFAF8] to-transparent">
-      <div className="rounded-2xl bg-white border border-[hsl(var(--border))] p-3 shadow-lg space-y-2">
+    <div className="sticky bottom-14 z-10 px-4 pb-2 pt-1 bg-gradient-to-t from-background via-background to-transparent">
+      <div className="rounded-2xl bg-card border border-border p-3 shadow-lg space-y-2">
         <div className="flex items-center gap-2">
           <Input
             ref={inputRef}
@@ -87,7 +87,7 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
           </Popover>
           <Button
             size="sm"
-            className="h-8 ml-auto bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs"
+            className="h-8 ml-auto bg-primary hover:bg-primary/90 text-white text-xs"
             onClick={handleCreate}
             disabled={!title.trim() || createQuickTask.isPending}
           >
