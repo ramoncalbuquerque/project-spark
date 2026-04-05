@@ -1,72 +1,58 @@
-
-
-# Feed de Tarefas — Plano de Implementação
-
-## Estratégia para useCards
-
-O `useCards` atual é usado por 4 componentes do calendário v1 (DayView, WeekView, MonthView, CardFormModal). Não vou refatorá-lo — vou criar um **novo hook `useFeedCards`** dedicado ao feed, evitando quebrar o v1.
+# Projetos — Plano de Implementação
 
 ## Arquivos a criar
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `src/hooks/useFeedCards.ts` | Hook dedicado ao feed: busca todos os cards do user (criado ou atribuído), sem dependência de CalendarContext. Enrichment de assignees, teams e project name. Filtro client-side por status (todos/atrasados/em_andamento/concluídos). Mutations de create/update/delete reutilizando `syncJunctions`. |
-| `src/components/feed/FeedCard.tsx` | Card compacto: borda esquerda colorida por status, chips status+tipo, título, meta (prazo, assignee, checklist), chip projeto clicável, avatar 24px. Toque navega para `/app/task/:id`. |
-| `src/components/feed/QuickCreateBar.tsx` | Barra sticky acima do bottom nav. Input "Delegar tarefa..." com ícone microfone. Ao focar expande mini-form (título + date picker + botão Criar). Cria card com `card_type: 'task'`, `origin_type: 'standalone'`. |
+| `src/hooks/useProjects.ts` | Hook CRUD de projetos: lista projetos onde user é criador ou membro (join project_members→profiles). Contadores de cards por status por projeto. Mutations: create (nome+desc+membros), update, delete, addMember, removeMember. |
+| `src/components/projects/CreateProjectModal.tsx` | Modal de criação: campo nome (obrigatório), descrição, multi-select de membros (busca profiles, chips com X). Botão Criar chama `createProject`. |
+| `src/components/projects/ProjectCard.tsx` | Card de projeto para a lista: nome, barra de progresso mini (verde = % concluído), texto "X abertas · Y em andamento · Z concluídas", badge status. Toque navega para `/app/project/:id`. |
 
-## Arquivo a modificar
+## Arquivos a modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/pages/v2/FeedPage.tsx` | Implementar tela completa: chips de filtro sticky, agrupamento por dia (Hoje, Amanhã, Próxima semana, Mais tarde), estado vazio, botão refresh, QuickCreateBar. |
+| `src/pages/v2/ProjectsPage.tsx` | Implementar: botão "+ Novo projeto" (só leaders), lista de ProjectCards, estado vazio, CreateProjectModal. |
+| `src/pages/v2/ProjectDetailPage.tsx` | Header editável + status badge, 4 mini-cards contadores, barra progresso colorida, lista FeedCards filtrados por project_id, seção "Discutido em", botão "+ Nova tarefa", gerenciar membros. |
 
 ## Detalhes técnicos
 
-### useFeedCards
+### useProjects
 
-- Query sem date range fixo — busca todos os cards visíveis ao user (RLS já filtra por created_by, assignee ou team member)
-- Enrichment: assignees + teams (igual ao existente) + project name via query separada em `projects` usando `project_id`s distintos
-- `EnrichedFeedCard` extends `EnrichedCard` com `project_name: string | null`
-- Filtro client-side: `statusFilter` pode ser `'all' | 'overdue' | 'in_progress' | 'completed'`
-- Overdue = `status !== 'completed'` e `start_date < now()`
-- `createQuickTask` mutation simplificada: recebe `{ title, start_date }`, seta `card_type: 'task'`, `created_by: user.id`
-- QueryKey: `["feed-cards"]` (separada do calendário)
+- Query: `projects` com `project_members(profile_id, profiles(id, full_name, avatar_url))`
+- Contadores: query separada em `cards` agrupando por project_id + status. Client-side merge.
+- `EnrichedProject`: project row + `members: {id, full_name, avatar_url}[]` + `counts: {pending, in_progress, completed, overdue, total}`
+- Overdue: status !== 'completed' AND start_date < now()
+- Mutations: createProject (insert projects + bulk project_members), updateProject, deleteProject, addMember, removeMember
+- QueryKey: `["projects"]`
 
-### FeedPage — agrupamento
+### ProjectsPage
 
-Agrupa cards por:
-1. **Hoje** — `isSameDay(start_date, today)`
-2. **Amanhã** — `isSameDay(start_date, tomorrow)`
-3. **Próxima semana** — `start_date` dentro dos próximos 7 dias (excl. hoje/amanhã)
-4. **Mais tarde** — restante
+- Header "Projetos" + botão "+" (só leader)
+- Lista de ProjectCards
+- Empty state: FolderOpen icon + "Nenhum projeto ainda"
 
-Header de grupo: "Hoje — qui, 3 abr" com `format(date, "EEE, d MMM", { locale: ptBR })`
+### ProjectDetailPage
 
-### FeedCard — cores da borda esquerda
+- Busca por useParams id
+- Header: nome editável inline (só creator) + badge status
+- 4 mini-cards grid 2x2: Total (cinza), Atrasadas (vermelho), Em andamento (azul), Concluídas (verde)
+- Barra progresso multicolorida (vermelho+azul+verde proporcional)
+- Tarefas: reutiliza FeedCard, dados filtrados por project_id
+- "Discutido em": ritual_occurrences que têm cards com este project_id
+- Botão sticky "+ Nova tarefa" com project_id preenchido
+- Membros: lista com avatar + add/remove (só creator)
 
-| Status | Cor |
-|--------|-----|
-| overdue (pendente + passado) | `#EF4444` vermelho |
-| in_progress | `#3B82F6` azul |
-| completed | `#22C55E` verde |
-| pending | `#94A3B8` cinza |
+### Cores barra de progresso
 
-### QuickCreateBar
-
-- Position: `sticky bottom-14` (acima do bottom nav de 56px)
-- Estado colapsado: input + mic icon
-- Estado expandido: título (preenchido), DatePicker (popover com Calendar shadcn), botão "Criar"
-- Ao criar: chama `createQuickTask`, fecha o form, `invalidateQueries`
-
-### Chips de filtro
-
-- Horizontais, scroll-x se necessário
-- "Atrasados" mostra badge contador vermelho
-- Chip ativo: `bg-[#4F46E5] text-white`, inativo: `bg-[#F4F4F1] text-[#6B6B6B]`
+| Segmento | Cor |
+|----------|-----|
+| Concluídas | `#22C55E` |
+| Em andamento | `#3B82F6` |
+| Atrasadas | `#EF4444` |
+| Pendentes | `#E2E8F0` |
 
 ## O que NÃO muda
 
-- `useCards.ts` original — intocado, v1 continua funcionando
-- CalendarContext, AppLayout, sidebar, componentes calendar
-- Schema do banco, RLS, auth
-
+- FeedPage, FeedCard (apenas reutilizado), TaskDetailPage
+- AppShellV2, BottomNav, schema, RLS, auth
