@@ -20,7 +20,7 @@ function parseCsv(text: string): CsvRow[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(";").map((h) => h.trim().toLowerCase());
+  const headers = lines[0].split(";").map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
 
   const colMap = {
     nome: headers.findIndex((h) => h.includes("nome")),
@@ -31,15 +31,21 @@ function parseCsv(text: string): CsvRow[] {
     grau: headers.findIndex((h) => h.includes("grau") || h.includes("hierarq")),
   };
 
+  const strip = (v: string) => v.replace(/^"|"$/g, "").trim();
+  const clean = (v: string) => {
+    const s = strip(v);
+    return s === "" ? "" : s;
+  };
+
   return lines.slice(1).map((line) => {
     const cols = line.split(";").map((c) => c.trim());
     return {
-      nome: colMap.nome >= 0 ? cols[colMap.nome] || "" : "",
-      cargo: colMap.cargo >= 0 ? cols[colMap.cargo] || "" : "",
-      departamento: colMap.departamento >= 0 ? cols[colMap.departamento] || "" : "",
-      superior: colMap.superior >= 0 ? cols[colMap.superior] || "" : "",
-      celular: colMap.celular >= 0 ? cols[colMap.celular] || "" : "",
-      grau: colMap.grau >= 0 ? cols[colMap.grau] || "" : "",
+      nome: colMap.nome >= 0 ? clean(cols[colMap.nome] || "") : "",
+      cargo: colMap.cargo >= 0 ? clean(cols[colMap.cargo] || "") : "",
+      departamento: colMap.departamento >= 0 ? clean(cols[colMap.departamento] || "") : "",
+      superior: colMap.superior >= 0 ? clean(cols[colMap.superior] || "") : "",
+      celular: colMap.celular >= 0 ? clean(cols[colMap.celular] || "") : "",
+      grau: colMap.grau >= 0 ? clean(cols[colMap.grau] || "") : "",
     };
   });
 }
@@ -114,7 +120,7 @@ export function useOrgImport() {
             .update({
               department: row.departamento || null,
               position: row.cargo || null,
-              phone: row.celular || null,
+              phone: row.celular && row.celular !== "N/A" ? row.celular : null,
               hierarchy_level: hierarchy,
             })
             .eq("id", profileId);
@@ -134,6 +140,7 @@ export function useOrgImport() {
               department: row.departamento || null,
               position: row.cargo || null,
               created_by: user.id,
+            
             })
             .select("id")
             .single();
