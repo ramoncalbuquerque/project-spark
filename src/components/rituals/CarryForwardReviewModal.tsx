@@ -2,9 +2,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { X } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { X, CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import type { PendingCard } from "@/hooks/useCarryForward";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -21,7 +24,7 @@ interface Props {
   lastOccurrenceDate: string | null;
   open: boolean;
   onClose: () => void;
-  onConfirm: (selectedCardIds: string[]) => void;
+  onConfirm: (selectedCardIds: string[], date: Date) => void;
   isCreating: boolean;
 }
 
