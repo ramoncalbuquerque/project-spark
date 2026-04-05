@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN target_date DATE;
