@@ -16,9 +16,27 @@ export type EnrichedFeedCard = Card & {
   is_overdue: boolean;
   checklist_total: number;
   checklist_done: number;
+  ritual_name: string | null;
+  carry_forward_count: number;
 };
 
-export type FeedStatusFilter = "all" | "overdue" | "in_progress" | "completed";
+export type FeedStatusFilter = "all" | "overdue" | "pending" | "in_progress" | "completed" | "cancelled";
+
+function computeIsOverdue(card: Card): boolean {
+  if (card.status === "completed" || card.status === "cancelled") return false;
+  const now = new Date();
+
+  // If card has explicit end_date (deadline), check that
+  if (card.end_date) {
+    return new Date(card.end_date) < now;
+  }
+
+  // Cards from rituals without end_date are NEVER overdue
+  if (card.origin_type === "ritual") return false;
+
+  // standalone / project / meeting cards: use start_date as deadline fallback
+  return new Date(card.start_date) < now;
+}
 
 export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilter?: { id: string; type: "profile" | "contact" } | null) {
   const { user } = useAuth();
@@ -41,9 +59,14 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilte
       const assigneeMap = new Map<string, AssigneeInfo[]>();
       const teamMap = new Map<string, TeamInfo[]>();
       const checklistMap = new Map<string, { total: number; done: number }>();
+      const ritualNameMap = new Map<string, string>();
+      const carryForwardMap = new Map<string, number>();
 
       const projectIds = [...new Set(cards.map((c) => c.project_id).filter(Boolean))] as string[];
       const projectMap = new Map<string, string>();
+
+      // Collect ritual_occurrence_ids for ritual name lookup
+      const occurrenceIds = [...new Set(cards.map((c) => c.ritual_occurrence_id).filter(Boolean))] as string[];
 
       try {
         const promises: PromiseLike<void>[] = [];
@@ -130,19 +153,49 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilte
           );
         }
 
+        // Ritual names via occurrences → rituals
+        if (occurrenceIds.length > 0) {
+          promises.push(
+            supabase
+              .from("ritual_occurrences")
+              .select("id, ritual_id, rituals(name)")
+              .in("id", occurrenceIds)
+              .then(({ data }) => {
+                for (const row of data ?? []) {
+                  const r = row.rituals as unknown as { name: string } | null;
+                  if (r) ritualNameMap.set(row.id, r.name);
+                }
+              })
+          );
+        }
+
+        // Carry-forward count (task_history entries per card)
+        promises.push(
+          supabase
+            .from("task_history")
+            .select("card_id")
+            .in("card_id", cardIds)
+            .then(({ data }) => {
+              for (const row of data ?? []) {
+                carryForwardMap.set(row.card_id, (carryForwardMap.get(row.card_id) ?? 0) + 1);
+              }
+            })
+        );
+
         await Promise.all(promises);
       } catch (err) {
         console.warn("Failed to enrich feed cards:", err);
       }
 
-      const now = new Date();
-
       return cards.map((card): EnrichedFeedCard => {
         const assignees = assigneeMap.get(card.id) ?? [];
         const teams = teamMap.get(card.id) ?? [];
         const checklist = checklistMap.get(card.id) ?? { total: 0, done: 0 };
-        const dateStr = card.end_date || card.start_date;
-        const is_overdue = card.status !== "completed" && (dateStr ? new Date(dateStr) < now : false);
+        const is_overdue = computeIsOverdue(card);
+
+        const ritual_name = card.ritual_occurrence_id
+          ? (ritualNameMap.get(card.ritual_occurrence_id) ?? null)
+          : null;
 
         return {
           ...card,
@@ -152,6 +205,8 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilte
           is_overdue,
           checklist_total: checklist.total,
           checklist_done: checklist.done,
+          ritual_name,
+          carry_forward_count: carryForwardMap.get(card.id) ?? 0,
         };
       });
     },
@@ -160,12 +215,12 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilte
 
   // Client-side filters
   const cards = allCards.filter((card) => {
-    // Status filter
     if (statusFilter === "overdue" && !card.is_overdue) return false;
+    if (statusFilter === "pending" && card.status !== "pending") return false;
     if (statusFilter === "in_progress" && card.status !== "in_progress") return false;
     if (statusFilter === "completed" && card.status !== "completed") return false;
+    if (statusFilter === "cancelled" && card.status !== "cancelled") return false;
 
-    // Person filter
     if (personFilter) {
       const hasAssignee = card.assignees.some(
         (a) => a.id === personFilter.id && a.type === personFilter.type
