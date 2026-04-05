@@ -56,13 +56,13 @@ export function useRitualOccurrences(ritualId: string | undefined) {
   });
 
   const createOccurrence = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input?: { date?: string }) => {
       if (!user || !ritualId) throw new Error("Erro");
       const { data, error } = await supabase
         .from("ritual_occurrences")
         .insert({
           ritual_id: ritualId,
-          date: new Date().toISOString(),
+          date: input?.date ?? new Date().toISOString(),
           status: "open",
           created_by: user.id,
         })
