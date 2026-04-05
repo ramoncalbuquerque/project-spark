@@ -307,8 +307,20 @@ export default function TaskDetailPage() {
             )}
 
             <AssigneeSelector
-              selected={card.assignees.map((a) => a.id)}
-              onChange={(ids) => updateAssignees.mutate(ids)}
+              selectedProfiles={card.assignees.map((a) => a.id)}
+              selectedContacts={card.contact_assignees.map((a) => a.id)}
+              onChangeProfiles={(pIds) =>
+                updateAssignees.mutate({
+                  profileIds: pIds,
+                  contactIds: card.contact_assignees.map((a) => a.id),
+                })
+              }
+              onChangeContacts={(cIds) =>
+                updateAssignees.mutate({
+                  profileIds: card.assignees.map((a) => a.id),
+                  contactIds: cIds,
+                })
+              }
             />
 
             <div className="flex items-center justify-between">

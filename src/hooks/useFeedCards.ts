@@ -213,6 +213,7 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilte
           supabase
             .from("card_assignees")
             .insert(assignee_profile_ids.map((pid) => ({ card_id: data.id, profile_id: pid })))
+            .then()
         );
       }
 
@@ -221,6 +222,7 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilte
           supabase
             .from("card_contact_assignees")
             .insert(assignee_contact_ids.map((cid) => ({ card_id: data.id, contact_id: cid })))
+            .then()
         );
       }
 
