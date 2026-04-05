@@ -142,7 +142,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
 
   /* ── Fetch cards ── */
   const { data: cards = [], isLoading } = useQuery({
-    queryKey: ["occurrence-cards", occurrence.id],
+    queryKey: ["occurrence-cards", occurrence.id, occurrence.date],
     queryFn: async () => {
       const { data: rawCards } = await supabase
         .from("cards")
@@ -154,6 +154,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
 
       const cardIds = rawCards.map((c) => c.id);
       const now = new Date();
+      const occurrenceDate = new Date(occurrence.date);
 
       const assigneeMap = new Map<string, AssigneeInfo[]>();
       const { data: assigneeRows } = await supabase
@@ -176,8 +177,6 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         .in("card_id", cardIds)
         .order("created_at", { ascending: true });
 
-      // A card is "carried" if it has task_history entries referencing
-      // ANY occurrence other than the current one (meaning it traveled here)
       const carriedCardIds = new Set<string>();
       for (const row of historyRows ?? []) {
         if (row.ritual_occurrence_id && row.ritual_occurrence_id !== occurrence.id) {
@@ -193,17 +192,19 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
       }
 
       return rawCards.map((card): OccurrenceCard => {
-        const d = card.end_date || card.start_date;
         const is_overdue = card.status !== "completed" && card.status !== "cancelled" && card.end_date
           ? new Date(card.end_date) < now
           : false;
         const history = historyMap.get(card.id);
-        const isNewThisOcc = !carriedCardIds.has(card.id);
+        const startedBeforeOccurrence = new Date(card.start_date) < occurrenceDate;
+        const isCarriedByHistory = carriedCardIds.has(card.id);
+        const isNewThisOcc = !(isCarriedByHistory || startedBeforeOccurrence);
+
         return {
           ...card,
           assignees: assigneeMap.get(card.id) ?? [],
-          firstSeen: history?.firstSeen ?? card.created_at,
-          historyCount: history?.count ?? 0,
+          firstSeen: history?.firstSeen ?? (startedBeforeOccurrence ? card.start_date : card.created_at),
+          historyCount: history?.count ?? (startedBeforeOccurrence ? 1 : 0),
           is_overdue,
           isNewThisOcc,
           lastContextNote: history?.lastNote ?? null,
