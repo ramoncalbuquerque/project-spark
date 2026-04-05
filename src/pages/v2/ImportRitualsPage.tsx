@@ -469,12 +469,74 @@ export default function ImportRitualsPage() {
       }
 
       setFinalStats({ rituals: createdRituals, occurrences: createdOccurrences, tasks: createdTasks });
+      setFailedItems(failedItemsList);
       setStep("done");
       setProgressPct(100);
     } catch (e: any) {
       addLog(`❌ Erro fatal: ${e.message}`);
+      setFailedItems(failedItemsList);
       setStep("done");
     }
+  };
+
+  /* ─── Retry failed items ─── */
+  const doRetryFailed = async () => {
+    if (!user || failedItems.length === 0) return;
+    setIsRetrying(true);
+    const log: string[] = [...importLog];
+    const addLog = (msg: string) => { log.push(msg); setImportLog([...log]); };
+    const stillFailed: typeof failedItems = [];
+    let retried = 0;
+
+    for (const fi of failedItems) {
+      try {
+        const { data: card, error } = await supabase
+          .from("cards")
+          .insert({
+            title: fi.cardTitle,
+            card_type: "task",
+            status: fi.status,
+            start_date: new Date().toISOString(),
+            created_by: user.id,
+            origin_type: "ritual",
+            ritual_occurrence_id: fi.occId,
+          })
+          .select("id")
+          .single();
+
+        if (error) {
+          addLog(`⚠️ Retry falhou '${fi.cardTitle}': ${error.message}`);
+          stillFailed.push(fi);
+          continue;
+        }
+
+        retried++;
+
+        if (fi.personMatch?.type === "profile") {
+          await supabase.from("card_assignees").insert({ card_id: card.id, profile_id: fi.personMatch.id });
+        } else if (fi.personMatch?.type === "contact") {
+          await supabase.from("card_contact_assignees").insert({ card_id: card.id, contact_id: fi.personMatch.id });
+        }
+
+        if (fi.item?.item_context?.trim()) {
+          await supabase.from("task_history").insert({
+            card_id: card.id,
+            ritual_occurrence_id: fi.occId,
+            status_at_time: fi.status,
+            context_note: fi.item.item_context.trim(),
+            updated_by: user.id,
+          });
+        }
+      } catch (e: any) {
+        addLog(`⚠️ Retry falhou '${fi.cardTitle}': ${e.message}`);
+        stillFailed.push(fi);
+      }
+    }
+
+    addLog(`✅ Reimportação: ${retried} tarefas criadas, ${stillFailed.length} ainda com erro`);
+    setFailedItems(stillFailed);
+    setFinalStats((prev) => ({ ...prev, tasks: prev.tasks + retried }));
+    setIsRetrying(false);
   };
 
   if (!isLeader) {
