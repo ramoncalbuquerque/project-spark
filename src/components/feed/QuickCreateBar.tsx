@@ -1,0 +1,100 @@
+import { useState, useRef } from "react";
+import { format } from "date-fns";
+import { Mic, X, CalendarIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import type { UseMutationResult } from "@tanstack/react-query";
+
+interface QuickCreateBarProps {
+  createQuickTask: UseMutationResult<unknown, Error, { title: string; start_date: string }>;
+}
+
+export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState<Date>(new Date());
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFocus = () => setExpanded(true);
+
+  const handleClose = () => {
+    setExpanded(false);
+    setTitle("");
+    setDate(new Date());
+  };
+
+  const handleCreate = () => {
+    if (!title.trim()) return;
+    createQuickTask.mutate(
+      { title: title.trim(), start_date: date.toISOString() },
+      { onSuccess: handleClose }
+    );
+  };
+
+  if (!expanded) {
+    return (
+      <div className="sticky bottom-14 z-10 px-4 pb-2 pt-1 bg-gradient-to-t from-[#FAFAF8] via-[#FAFAF8] to-transparent">
+        <div
+          className="flex items-center gap-2 h-11 rounded-3xl bg-[#F4F4F1] px-4 cursor-text border border-[hsl(var(--border))]"
+          onClick={() => {
+            setExpanded(true);
+            setTimeout(() => inputRef.current?.focus(), 50);
+          }}
+        >
+          <span className="text-sm text-muted-foreground flex-1">Delegar tarefa...</span>
+          <Mic size={18} className="text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sticky bottom-14 z-10 px-4 pb-2 pt-1 bg-gradient-to-t from-[#FAFAF8] via-[#FAFAF8] to-transparent">
+      <div className="rounded-2xl bg-white border border-[hsl(var(--border))] p-3 shadow-lg space-y-2">
+        <div className="flex items-center gap-2">
+          <Input
+            ref={inputRef}
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Título da tarefa"
+            className="flex-1 h-9 text-sm"
+            onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+          />
+          <button onClick={handleClose} className="p-1 text-muted-foreground">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                <CalendarIcon size={14} />
+                {format(date, "dd/MM")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(d) => d && setDate(d)}
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button
+            size="sm"
+            className="h-8 ml-auto bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs"
+            onClick={handleCreate}
+            disabled={!title.trim() || createQuickTask.isPending}
+          >
+            {createQuickTask.isPending ? "Criando..." : "Criar"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
