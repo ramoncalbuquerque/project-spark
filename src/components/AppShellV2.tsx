@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import BottomNav from "./BottomNav";
+import logoMunnir from "@/assets/logo-munnir.png";
 
 const AppShellV2 = () => {
   const navigate = useNavigate();
