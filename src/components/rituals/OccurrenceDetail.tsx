@@ -176,9 +176,11 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         .in("card_id", cardIds)
         .order("created_at", { ascending: true });
 
+      // A card is "carried" if it has task_history entries referencing
+      // ANY occurrence other than the current one (meaning it traveled here)
       const carriedCardIds = new Set<string>();
       for (const row of historyRows ?? []) {
-        if (previousOccurrenceId && row.ritual_occurrence_id === previousOccurrenceId) {
+        if (row.ritual_occurrence_id && row.ritual_occurrence_id !== occurrence.id) {
           carriedCardIds.add(row.card_id);
         }
         const entry = historyMap.get(row.card_id);
@@ -196,9 +198,7 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
           ? new Date(card.end_date) < now
           : false;
         const history = historyMap.get(card.id);
-        const isNewThisOcc = !carriedCardIds.has(card.id) && !previousOccurrenceId
-          ? true
-          : !carriedCardIds.has(card.id);
+        const isNewThisOcc = !carriedCardIds.has(card.id);
         return {
           ...card,
           assignees: assigneeMap.get(card.id) ?? [],
