@@ -13,6 +13,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useEffect, useState } from "react";
+import logoMunnir from "@/assets/logo-munnir.png";
 
 const AppHeader = () => {
   const navigate = useNavigate();
@@ -40,8 +41,9 @@ const AppHeader = () => {
     <header className="h-14 border-b border-border bg-card flex items-center justify-between px-3 shrink-0">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="md:hidden" />
+        <img src={logoMunnir} alt="Munnir" className="h-8 w-8 rounded-md object-cover" />
         <span className="text-lg font-bold text-primary select-none">
-          🌱 Semear
+          Munnir
         </span>
         <span className="hidden sm:inline-block text-xs text-muted-foreground capitalize ml-2">
           {todayLabel}
