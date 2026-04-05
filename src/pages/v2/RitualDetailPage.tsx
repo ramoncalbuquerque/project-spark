@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
@@ -11,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { format } from "date-fns";
+import { format, differenceInDays, addDays, addWeeks, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useRituals, FREQ_LABEL } from "@/hooks/useRituals";
@@ -19,6 +20,26 @@ import { useRitualOccurrences } from "@/hooks/useRitualOccurrences";
 import { useCarryForward } from "@/hooks/useCarryForward";
 import OccurrenceDetail from "@/components/rituals/OccurrenceDetail";
 import { Trash2 } from "lucide-react";
+
+const FREQ_BADGE_COLOR: Record<string, string> = {
+  weekly: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  biweekly: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  monthly: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  custom: "bg-muted text-muted-foreground",
+};
+
+function getNextSuggestion(lastDate: string, frequency: string | null): string | null {
+  if (!frequency) return null;
+  const d = new Date(lastDate);
+  let next: Date;
+  switch (frequency) {
+    case "weekly": next = addWeeks(d, 1); break;
+    case "biweekly": next = addWeeks(d, 2); break;
+    case "monthly": next = addMonths(d, 1); break;
+    default: return null;
+  }
+  return format(next, "dd/MM/yyyy");
+}
 
 export default function RitualDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +54,27 @@ export default function RitualDetailPage() {
   const [editName, setEditName] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Objective (description) field
+  const [objective, setObjective] = useState<string | null>(null);
+  const objectiveRef = useRef<HTMLTextAreaElement>(null);
+
+  const currentObjective = objective ?? ritual?.description ?? "";
+
+  const handleObjectiveBlur = useCallback(() => {
+    if (!ritual || objective === null) return;
+    const trimmed = objective.trim();
+    if (trimmed !== (ritual.description ?? "")) {
+      updateRitual.mutate({ id: ritual.id, description: trimmed || "" });
+    }
+  }, [ritual, objective, updateRitual]);
+
   const pendingCount = ritual?.lastOccurrence?.pendingCount ?? 0;
+
+  // Next occurrence suggestion
+  const lastOcc = occurrences.length > 0 ? occurrences[0] : null;
+  const nextSuggestion = lastOcc && ritual?.frequency
+    ? getNextSuggestion(lastOcc.date, ritual.frequency)
+    : null;
 
   const handleNewOccurrence = async () => {
     if (!id) return;
@@ -62,71 +103,91 @@ export default function RitualDetailPage() {
     );
   }
 
-  // Default open the most recent occurrence
   const defaultOpen = occurrences.length > 0 ? [occurrences[0].id] : [];
 
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 sticky top-0 bg-background z-10 border-b border-border">
-        <button onClick={() => navigate("/app/rituals")} className="p-1">
-          <ArrowLeft size={20} />
-        </button>
+      <div className="px-4 py-3 sticky top-0 bg-background z-10 border-b border-border space-y-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate("/app/rituals")} className="p-1">
+            <ArrowLeft size={20} />
+          </button>
 
-        {editing ? (
-          <div className="flex items-center gap-1 flex-1">
-            <Input
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="h-8 text-sm"
-              autoFocus
-            />
-            <button onClick={() => {
-              if (editName.trim()) updateRitual.mutate({ id: ritual.id, name: editName.trim() });
-              setEditing(false);
-            }}>
-              <Check size={16} className="text-[#22C55E]" />
-            </button>
-            <button onClick={() => setEditing(false)}>
-              <X size={16} className="text-muted-foreground" />
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="min-w-0">
-              <h1 className="text-base font-medium text-foreground truncate">{ritual.name}</h1>
-              <p className="text-[10px] text-muted-foreground">
-                {FREQ_LABEL[ritual.frequency ?? ""] ?? ritual.frequency ?? ""}
-              </p>
+          {editing ? (
+            <div className="flex items-center gap-1 flex-1">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="h-8 text-sm"
+                autoFocus
+              />
+              <button onClick={() => {
+                if (editName.trim()) updateRitual.mutate({ id: ritual.id, name: editName.trim() });
+                setEditing(false);
+              }}>
+                <Check size={16} className="text-[#22C55E]" />
+              </button>
+              <button onClick={() => setEditing(false)}>
+                <X size={16} className="text-muted-foreground" />
+              </button>
             </div>
-            <button onClick={() => { setEditName(ritual.name); setEditing(true); }}>
-              <Pencil size={14} className="text-muted-foreground" />
-            </button>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h1 className="text-base font-medium text-foreground truncate">{ritual.name}</h1>
+              {ritual.frequency && (
+                <Badge className={`text-[10px] px-1.5 py-0 h-4 font-medium border-none shrink-0 ${FREQ_BADGE_COLOR[ritual.frequency] ?? FREQ_BADGE_COLOR.custom}`}>
+                  {FREQ_LABEL[ritual.frequency] ?? ritual.frequency}
+                </Badge>
+              )}
+              <button onClick={() => { setEditName(ritual.name); setEditing(true); }}>
+                <Pencil size={14} className="text-muted-foreground" />
+              </button>
+            </div>
+          )}
 
-        {pendingCount > 0 && (
-          <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-none text-[10px] px-1.5 py-0 h-4 font-medium shrink-0">
-            {pendingCount}
-          </Badge>
-        )}
+          {pendingCount > 0 && (
+            <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-none text-[10px] px-1.5 py-0 h-4 font-medium shrink-0">
+              {pendingCount}
+            </Badge>
+          )}
+        </div>
+
+        {/* Objective field */}
+        <Textarea
+          ref={objectiveRef}
+          placeholder="Descreva o objetivo desta ritualística..."
+          value={currentObjective}
+          onChange={(e) => setObjective(e.target.value)}
+          onBlur={handleObjectiveBlur}
+          rows={2}
+          className="text-xs resize-none min-h-[40px]"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-4 pt-3">
         {/* New occurrence button */}
-        <Button
-          className="w-full bg-primary hover:bg-primary/90 h-12 text-sm font-medium"
-          onClick={handleNewOccurrence}
-          disabled={creating}
-        >
-          <Plus size={18} className="mr-2" />
-          {creating ? "Criando..." : "Nova Ocorrência"}
-          {pendingCards.length > 0 && (
-            <span className="ml-2 text-[10px] opacity-80">
-              ({pendingCards.length} pendente{pendingCards.length !== 1 ? "s" : ""} serão puxados)
-            </span>
+        <div className="space-y-1">
+          <Button
+            className="w-full bg-primary hover:bg-primary/90 h-12 text-sm font-medium"
+            onClick={handleNewOccurrence}
+            disabled={creating}
+          >
+            <Plus size={18} className="mr-2" />
+            {creating ? "Criando..." : "Nova Ocorrência"}
+            {pendingCards.length > 0 && (
+              <span className="ml-2 text-[10px] opacity-80">
+                ({pendingCards.length} pendente{pendingCards.length !== 1 ? "s" : ""} serão puxados)
+              </span>
+            )}
+          </Button>
+          {lastOcc && nextSuggestion && (
+            <p className="text-[10px] text-muted-foreground text-center">
+              Última ocorrência: {format(new Date(lastOcc.date), "dd/MM/yyyy")}.
+              Baseado na frequência {(FREQ_LABEL[ritual.frequency ?? ""] ?? "").toLowerCase()}, a próxima seria por volta de {nextSuggestion}.
+            </p>
           )}
-        </Button>
+        </div>
 
         {/* Occurrences list */}
         {occsLoading ? (
@@ -135,36 +196,39 @@ export default function RitualDetailPage() {
           <p className="text-xs text-muted-foreground text-center py-8">Nenhuma ocorrência ainda</p>
         ) : (
           <Accordion type="multiple" defaultValue={defaultOpen} className="space-y-2">
-            {occurrences.map((occ) => (
-              <AccordionItem
-                key={occ.id}
-                value={occ.id}
-                className="bg-card border border-border rounded-xl overflow-hidden"
-              >
-                <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                  <div className="flex items-center gap-2 text-left flex-1 min-w-0">
-                    <span className="text-xs font-medium text-foreground">
-                      {format(new Date(occ.date), "d MMM yyyy", { locale: ptBR })}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {occ.cardCount} {occ.cardCount === 1 ? "item" : "itens"} · {occ.completedCount} concluído{occ.completedCount !== 1 ? "s" : ""}
-                    </span>
-                    <Badge
-                      className={`text-[9px] px-1 py-0 h-3.5 border-none ml-auto ${
-                        occ.status === "open"
-                          ? "bg-[#3B82F6]/10 text-[#3B82F6]"
-                          : "bg-[#94A3B8]/10 text-[#94A3B8]"
-                      }`}
-                    >
-                      {occ.status === "open" ? "Aberta" : "Fechada"}
-                    </Badge>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-4 pb-3">
-                  <OccurrenceDetail occurrence={occ} />
-                </AccordionContent>
-              </AccordionItem>
-            ))}
+            {occurrences.map((occ, idx) => {
+              const prevOcc = idx < occurrences.length - 1 ? occurrences[idx + 1] : null;
+              return (
+                <AccordionItem
+                  key={occ.id}
+                  value={occ.id}
+                  className="bg-card border border-border rounded-xl overflow-hidden"
+                >
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                    <div className="flex items-center gap-2 text-left flex-1 min-w-0">
+                      <span className="text-xs font-medium text-foreground">
+                        {format(new Date(occ.date), "d MMM yyyy", { locale: ptBR })}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {occ.cardCount} {occ.cardCount === 1 ? "item" : "itens"} · {occ.completedCount} concluído{occ.completedCount !== 1 ? "s" : ""}
+                      </span>
+                      <Badge
+                        className={`text-[9px] px-1 py-0 h-3.5 border-none ml-auto ${
+                          occ.status === "open"
+                            ? "bg-[#3B82F6]/10 text-[#3B82F6]"
+                            : "bg-[#94A3B8]/10 text-[#94A3B8]"
+                        }`}
+                      >
+                        {occ.status === "open" ? "Aberta" : "Fechada"}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-3">
+                    <OccurrenceDetail occurrence={occ} previousOccurrenceId={prevOcc?.id ?? null} />
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
           </Accordion>
         )}
 

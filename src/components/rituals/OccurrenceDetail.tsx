@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,20 +34,43 @@ const STATUS_DOT: Record<string, string> = {
 
 interface Props {
   occurrence: EnrichedOccurrence;
+  previousOccurrenceId: string | null;
   onClose?: () => void;
 }
 
-export default function OccurrenceDetail({ occurrence, onClose }: Props) {
+export default function OccurrenceDetail({ occurrence, previousOccurrenceId, onClose }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
   const [notes, setNotes] = useState(occurrence.notes ?? "");
-  const [notesDirty, setNotesDirty] = useState(false);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [contextInputs, setContextInputs] = useState<Record<string, string>>({});
   const [activeContextId, setActiveContextId] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch cards for this occurrence with enrichment
+  // Auto-save notes with debounce
+  const saveNotesNow = useCallback(async (value: string) => {
+    await supabase
+      .from("ritual_occurrences")
+      .update({ notes: value })
+      .eq("id", occurrence.id);
+  }, [occurrence.id]);
+
+  const handleNotesChange = (value: string) => {
+    setNotes(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      saveNotesNow(value);
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  // Fetch cards for this occurrence
   const { data: cards = [], isLoading } = useQuery({
     queryKey: ["occurrence-cards", occurrence.id],
     queryFn: async () => {
@@ -62,7 +85,6 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
       const cardIds = rawCards.map((c) => c.id);
       const now = new Date();
 
-      // Assignees
       const assigneeMap = new Map<string, AssigneeInfo[]>();
       const { data: assigneeRows } = await supabase
         .from("card_assignees")
@@ -77,7 +99,6 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
         assigneeMap.set(row.card_id, list);
       }
 
-      // Task history for first seen + count
       const historyMap = new Map<string, { firstSeen: string | null; count: number }>();
       const { data: historyRows } = await supabase
         .from("task_history")
@@ -110,19 +131,44 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
     enabled: !!occurrence.id,
   });
 
-  // Save notes
-  const saveNotes = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from("ritual_occurrences")
-        .update({ notes })
-        .eq("id", occurrence.id);
-      if (error) throw error;
+  // Summary stats: carried, completed since last, new
+  const { data: summaryStats } = useQuery({
+    queryKey: ["occurrence-summary", occurrence.id, previousOccurrenceId],
+    queryFn: async () => {
+      let carried = 0;
+      let completedSinceLast = 0;
+      const totalCards = cards.length;
+
+      if (previousOccurrenceId) {
+        // Cards that were in the previous occurrence and also in this one
+        const { data: prevCards } = await supabase
+          .from("cards")
+          .select("id, status")
+          .eq("ritual_occurrence_id", previousOccurrenceId);
+
+        const prevIds = new Set((prevCards ?? []).map((c) => c.id));
+
+        // Cards carried = cards in this occurrence that have task_history referencing previous occ
+        const { data: historyCarried } = await supabase
+          .from("task_history")
+          .select("card_id")
+          .eq("ritual_occurrence_id", occurrence.id);
+
+        const carriedIds = new Set<string>();
+        for (const h of historyCarried ?? []) {
+          if (prevIds.has(h.card_id)) carriedIds.add(h.card_id);
+        }
+        carried = carriedIds.size;
+
+        // Completed since last = cards from prev occurrence that are now completed
+        completedSinceLast = (prevCards ?? []).filter(c => c.status === "completed").length;
+      }
+
+      const newItems = totalCards - carried;
+
+      return { carried, completedSinceLast, newItems: Math.max(0, newItems) };
     },
-    onSuccess: () => {
-      setNotesDirty(false);
-      toast.success("Notas salvas");
-    },
+    enabled: !!occurrence.id && cards.length > 0,
   });
 
   // Close occurrence
@@ -164,7 +210,7 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
     },
   });
 
-  // Add context note to task history
+  // Add context note
   const addContextNote = useMutation({
     mutationFn: async ({ cardId, note }: { cardId: string; note: string }) => {
       if (!user) throw new Error("Erro");
@@ -190,13 +236,34 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
 
   return (
     <div className="space-y-3 pb-4">
+      {/* Notes field — prominent, at top */}
+      <div className="border-l-2 border-primary rounded-r-lg bg-primary/5 p-3">
+        <p className="text-xs font-medium text-foreground mb-1.5">Notas da reunião</p>
+        <Textarea
+          placeholder="Registre decisões, observações e contexto da reunião..."
+          value={notes}
+          onChange={(e) => handleNotesChange(e.target.value)}
+          className="text-xs resize-none bg-transparent border-none p-0 focus-visible:ring-0 min-h-[120px]"
+          disabled={!isOpen}
+        />
+      </div>
+
+      {/* Summary stats */}
+      {summaryStats && (summaryStats.carried > 0 || summaryStats.completedSinceLast > 0 || summaryStats.newItems > 0) && (
+        <p className="text-[10px] text-muted-foreground">
+          {summaryStats.carried > 0 && `${summaryStats.carried} puxado${summaryStats.carried !== 1 ? "s" : ""}`}
+          {summaryStats.carried > 0 && summaryStats.completedSinceLast > 0 && " · "}
+          {summaryStats.completedSinceLast > 0 && `${summaryStats.completedSinceLast} concluído${summaryStats.completedSinceLast !== 1 ? "s" : ""} desde a última`}
+          {(summaryStats.carried > 0 || summaryStats.completedSinceLast > 0) && summaryStats.newItems > 0 && " · "}
+          {summaryStats.newItems > 0 && `${summaryStats.newItems} novo${summaryStats.newItems !== 1 ? "s" : ""}`}
+        </p>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            {format(new Date(occurrence.date), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-          </p>
-        </div>
+        <p className="text-sm font-medium text-foreground">
+          {format(new Date(occurrence.date), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+        </p>
         <Badge
           className={`text-[10px] px-1.5 py-0 h-4 font-medium border-none ${
             isOpen ? "bg-[#3B82F6]/10 text-[#3B82F6]" : "bg-[#94A3B8]/10 text-[#94A3B8]"
@@ -249,7 +316,6 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
                   )}
                 </button>
 
-                {/* Context note input */}
                 {isOpen && (
                   <>
                     {activeContextId === card.id ? (
@@ -320,29 +386,6 @@ export default function OccurrenceDetail({ occurrence, onClose }: Props) {
           </Button>
         </div>
       )}
-
-      {/* General notes */}
-      <div>
-        <p className="text-xs font-medium text-foreground mb-1">Notas gerais</p>
-        <Textarea
-          placeholder="Notas da ocorrência..."
-          value={notes}
-          onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-          rows={3}
-          className="text-xs"
-          disabled={!isOpen}
-        />
-        {notesDirty && isOpen && (
-          <Button
-            size="sm"
-            className="mt-1 h-7 text-xs bg-primary hover:bg-primary/90"
-            onClick={() => saveNotes.mutate()}
-            disabled={saveNotes.isPending}
-          >
-            Salvar notas
-          </Button>
-        )}
-      </div>
 
       {/* Close occurrence */}
       {isOpen && (
