@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, AlertTriangle, Check, ArrowLeft } from "lucide-react";
+import { Upload, FileText, AlertTriangle, Check, ArrowLeft, RotateCcw } from "lucide-react";
 
 /* ─── Types ─── */
 type CsvRow = {
@@ -112,6 +112,8 @@ export default function ImportRitualsPage() {
   const [progressPct, setProgressPct] = useState(0);
   const [importLog, setImportLog] = useState<string[]>([]);
   const [finalStats, setFinalStats] = useState({ rituals: 0, occurrences: 0, tasks: 0 });
+  const [failedItems, setFailedItems] = useState<Array<{ item: any; occId: string; cardTitle: string; status: string; personMatch: PersonMatch | null }>>([]);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // People cache
   const [peopleCache, setPeopleCache] = useState<PersonMatch[]>([]);
