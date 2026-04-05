@@ -557,17 +557,51 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
         </>
       )}
 
-      {/* Close occurrence */}
+      {/* Close / Delete occurrence */}
       {isOpen && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full text-xs"
-          onClick={() => closeOccurrence.mutate()}
-          disabled={closeOccurrence.isPending}
-        >
-          <Lock size={12} className="mr-1" /> Fechar ocorrência
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 text-xs"
+            onClick={() => closeOccurrence.mutate()}
+            disabled={closeOccurrence.isPending}
+          >
+            <Lock size={12} className="mr-1" /> Fechar ocorrência
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-destructive hover:text-destructive"
+              >
+                <Trash2 size={12} className="mr-1" /> Excluir
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir ocorrência?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {cards.length > 0
+                    ? `Esta ocorrência tem ${cards.length} ite${cards.length !== 1 ? "ns" : "m"} e notas. As tarefas serão PRESERVADAS no sistema, mas as observações registradas nesta reunião serão perdidas.`
+                    : "As observações registradas nesta reunião serão perdidas."}
+                  {"\n\nDeseja continuar?"}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => deleteOccurrence.mutate()}
+                  disabled={deleteOccurrence.isPending}
+                >
+                  Excluir mesmo assim
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       )}
     </div>
   );
