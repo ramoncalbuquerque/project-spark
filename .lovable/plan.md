@@ -1,88 +1,42 @@
-# Ritualísticas — Plano de Implementação
 
-## Arquivos a criar
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/hooks/useRituals.ts` | Hook CRUD de ritualísticas: lista rituals onde user é criador ou membro (join ritual_members→profiles). Enrich com: membros, última ocorrência (data), contagem de pendentes (cards vinculados à última ocorrência com status != completed). Mutations: create (nome+freq+membros), update, delete, addMember, removeMember. QueryKey: `["rituals"]`. |
-| `src/hooks/useRitualOccurrences.ts` | Hook para ocorrências de uma ritualística: lista ritual_occurrences por ritual_id ordenadas por data DESC. Para cada ocorrência: count de cards vinculados (total + completed). Mutation: createOccurrence, updateOccurrence (notas, status). QueryKey: `["ritual-occurrences", ritualId]`. |
-| `src/hooks/useCarryForward.ts` | Hook que recebe ritualId. Busca a última ocorrência. Busca cards com ritual_occurrence_id = essa ocorrência e status != 'completed'. Retorna lista de tarefas pendentes para carry-forward. Função `executeCarryForward(newOccurrenceId)`: para cada tarefa pendente, atualiza card.ritual_occurrence_id para newOccurrenceId e insere task_history com status_at_time + context_note. |
-| `src/components/rituals/CreateRitualModal.tsx` | Modal: nome (obrigatório), frequência (select: weekly/biweekly/monthly/custom), multi-select membros. |
-| `src/components/rituals/RitualCard.tsx` | Card para lista: nome, avatares empilhados (max 4 + "+N"), texto "Última: 12 mar 2026 · 4 pendentes", badge vermelho se pendentes > 0. Toque navega para `/app/ritual/:id`. |
-| `src/components/rituals/OccurrenceDetail.tsx` | Componente para detalhe de uma ocorrência: data + status, lista de cards (dot colorido + título + assignee + "desde X · N atualizações"), input para nota de contexto inline, botão "+ Adicionar novo item", campo notas gerais, botão "Fechar ocorrência". |
+# Fix: Deleting a ritual fails due to foreign key constraint on task_history
 
-## Arquivos a modificar
+## Problem
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/v2/RitualsPage.tsx` | Implementar: botão "+ Nova ritualística" (só leaders), lista de RitualCards, empty state, CreateRitualModal. |
-| `src/pages/v2/RitualDetailPage.tsx` | Implementar: header (nome + freq + badge), botão "Nova ocorrência" (cria + carry-forward + navega), lista de ocorrências anteriores, e ao clicar numa ocorrência abre OccurrenceDetail inline (accordion/expandido). |
-| `src/App.tsx` | Adicionar rota `/app/ritual/:id/occurrence/:occId` (ou manter tudo no RitualDetailPage com state). |
+When deleting a ritual, the cascade flows like this:
 
-## Detalhes técnicos
+```text
+DELETE rituals (id)
+  → CASCADE DELETE ritual_occurrences (ritual_id)
+    → task_history has FK (ritual_occurrence_id → ritual_occurrences.id) with NO CASCADE
+    → ERROR: foreign key violation
+```
 
-### useRituals
+The `cards` table is fine (uses `ON DELETE SET NULL`), but `task_history.ritual_occurrence_id` uses the default `RESTRICT`, which blocks the delete.
 
-- Query: `rituals` com select `*, ritual_members(profile_id, profiles(id, full_name, avatar_url))`
-- Para última ocorrência + pendentes: query separada em `ritual_occurrences` (última por ritual_id) + count de cards pendentes vinculados
-- `EnrichedRitual`: ritual row + `members: ProfileInfo[]` + `lastOccurrence: { date: string, pendingCount: number } | null`
-- Mutations: createRitual (insert rituals + bulk ritual_members), updateRitual, deleteRitual
+There are currently 3 `task_history` rows referencing occurrences of the existing ritual, confirming this is the cause.
 
-### useRitualOccurrences
+## Solution
 
-- Query: `ritual_occurrences` onde ritual_id = param, order by date DESC
-- Para cada: count cards (total + done) via query em cards onde ritual_occurrence_id = occ.id
-- `EnrichedOccurrence`: occ row + `cardCount: number` + `completedCount: number`
+Create a database migration to alter the foreign key on `task_history.ritual_occurrence_id` to use `ON DELETE SET NULL` instead of `RESTRICT`. This matches the behavior already used by `cards.ritual_occurrence_id` — the history record is preserved but the occurrence reference becomes null.
 
-### useCarryForward
+### Migration SQL
 
-- Input: ritualId
-- Busca última ocorrência: `ritual_occurrences.select().eq(ritual_id).order(date, desc).limit(1)`
-- Busca cards pendentes: `cards.select().eq(ritual_occurrence_id, lastOcc.id).neq(status, 'completed')`
-- `executeCarryForward(newOccId)`:
-  1. Para cada card pendente: update `ritual_occurrence_id` para newOccId
-  2. Insert task_history: `{ card_id, ritual_occurrence_id: newOccId, status_at_time: card.status, updated_by: user.id, context_note: 'Carry-forward automático' }`
+```sql
+ALTER TABLE public.task_history
+  DROP CONSTRAINT task_history_ritual_occurrence_id_fkey,
+  ADD CONSTRAINT task_history_ritual_occurrence_id_fkey
+    FOREIGN KEY (ritual_occurrence_id)
+    REFERENCES public.ritual_occurrences(id)
+    ON DELETE SET NULL;
+```
 
-### Fluxo "Nova Ocorrência"
+No code changes needed — the delete logic in `useRituals.ts` and `RitualDetailPage.tsx` is correct. The issue is purely a database constraint.
 
-1. User clica "Nova ocorrência"
-2. Insert `ritual_occurrences` com date=now(), status='open', ritual_id, created_by
-3. Chama `executeCarryForward(newOcc.id)` — puxa pendentes da última ocorrência
-4. Expande/navega para a nova ocorrência
+## What stays the same
 
-### OccurrenceDetail
+- No changes to any React components, hooks, pages, or schema structure
+- Task history records are preserved (only the `ritual_occurrence_id` field becomes null)
+- Cards already handle this correctly with `ON DELETE SET NULL`
 
-- Header: data formatada + badge status (Aberta/Fechada)
-- Lista de cards vinculados (ritual_occurrence_id = occ.id):
-  - Dot de status (mesmas cores do FeedCard)
-  - Título
-  - Assignee avatar
-  - "desde jul/25" = primeira entry em task_history para este card
-  - "3 atualizações" = count de task_history para este card
-  - Toque → navigate(`/app/task/${card.id}`)
-- Botão "Atualizar contexto" por item: input inline → salva task_history com context_note
-- Botão "+ Adicionar novo item": cria card com ritual_occurrence_id + card_type='task' + origin_type='ritual'
-- Textarea notas gerais: salva em ritual_occurrences.notes
-- Botão "Fechar ocorrência": update status='closed'
-
-### RitualDetailPage — layout
-
-- Sticky header: nome + freq + badge pendentes
-- Botão "Nova ocorrência" grande indigo (sticky ou destaque no topo)
-- Lista de ocorrências como accordion:
-  - Fechada: "15 mar 2026 · 5 itens · 3 concluídos"
-  - Aberta: renderiza OccurrenceDetail inline
-- A ocorrência mais recente aberta por padrão
-
-### Cores/design
-
-- Badge pendentes: `bg-[#EF4444]/10 text-[#EF4444]` se > 0
-- Frequência labels: weekly="Semanal", biweekly="Quinzenal", monthly="Mensal", custom="Personalizada"
-- Status dots nas tarefas: mesmas cores do FeedCard (overdue=#EF4444, in_progress=#3B82F6, completed=#22C55E, pending=#94A3B8)
-
-## O que NÃO muda
-
-- FeedPage, FeedCard (reutilizado read-only), ProjectsPage, ProjectDetailPage, TaskDetailPage
-- AppShellV2, BottomNav
-- Schema do banco, RLS, auth
-- useCards, useFeedCards, useProjects
