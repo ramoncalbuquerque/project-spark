@@ -146,7 +146,6 @@ function DropdownBody({
               disabled={o.type === "contact"}
               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-xs transition-colors ${o.type === "contact" ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"} ${isSelected ? "bg-accent/60" : ""}`}
             >
-            >
               <Avatar className="h-5 w-5">
                 <AvatarImage src={o.avatar_url ?? undefined} />
                 <AvatarFallback className="text-[9px] bg-muted">
