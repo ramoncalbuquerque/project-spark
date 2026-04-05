@@ -20,7 +20,7 @@ function parseCsv(text: string): CsvRow[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(";").map((h) => h.trim().toLowerCase());
+  const headers = lines[0].split(";").map((h) => h.replace(/^"|"$/g, "").trim().toLowerCase());
 
   const colMap = {
     nome: headers.findIndex((h) => h.includes("nome")),
