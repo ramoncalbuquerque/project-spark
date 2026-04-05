@@ -667,6 +667,17 @@ export default function ImportRitualsPage() {
                 <Button onClick={() => navigate("/app/rituals")} className="mt-2">
                   Ver Ritualísticas
                 </Button>
+                {failedItems.length > 0 && (
+                  <Button
+                    variant="outline"
+                    className="mt-2 gap-2"
+                    onClick={doRetryFailed}
+                    disabled={isRetrying}
+                  >
+                    <RotateCcw size={14} className={isRetrying ? "animate-spin" : ""} />
+                    Reimportar {failedItems.length} erro{failedItems.length > 1 ? "s" : ""}
+                  </Button>
+                )}
               </div>
             )}
 
