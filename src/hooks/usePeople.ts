@@ -17,6 +17,8 @@ export type UnifiedPerson = {
   hierarchy_level: string | null;
   has_account: boolean;
   has_phone: boolean;
+  phone: string | null;
+  contact_id: string | null; // non-null if this person comes from contacts table
   pending_count: number;
   overdue_count: number;
 };
@@ -92,6 +94,8 @@ export function usePeople() {
           hierarchy_level: p.hierarchy_level,
           has_account: true,
           has_phone: !!p.phone,
+          phone: p.phone,
+          contact_id: null,
           pending_count: statsMap.get(p.id)?.pending ?? 0,
           overdue_count: statsMap.get(p.id)?.overdue ?? 0,
         };
@@ -111,6 +115,8 @@ export function usePeople() {
           hierarchy_level: null,
           has_account: false,
           has_phone: !!c.phone && c.phone !== "N/A",
+          phone: c.phone && c.phone !== "N/A" ? c.phone : null,
+          contact_id: c.id,
           pending_count: 0,
           overdue_count: 0,
         });
