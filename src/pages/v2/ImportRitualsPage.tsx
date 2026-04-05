@@ -207,6 +207,7 @@ export default function ImportRitualsPage() {
     setProgressPct(0);
 
     const log: string[] = [];
+    const failedItemsList: Array<{ item: any; occId: string; cardTitle: string; status: string; personMatch: PersonMatch | null }> = [];
     const addLog = (msg: string) => {
       log.push(msg);
       setImportLog([...log]);
