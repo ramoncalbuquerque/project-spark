@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Repeat } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Repeat, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRituals } from "@/hooks/useRituals";
@@ -9,15 +10,26 @@ import CreateRitualModal from "@/components/rituals/CreateRitualModal";
 export default function RitualsPage() {
   const { rituals, isLoading, isLeader, createRitual } = useRituals();
   const [showCreate, setShowCreate] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background z-10">
         <h1 className="text-lg font-semibold text-foreground">Ritualísticas</h1>
         {isLeader && (
-          <Button size="sm" className="h-8 px-3 text-xs" onClick={() => setShowCreate(true)}>
-            <Plus size={14} className="mr-1" /> Nova
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 text-xs"
+              onClick={() => navigate("/app/import-rituals")}
+            >
+              <Upload size={14} className="mr-1" /> Importar
+            </Button>
+            <Button size="sm" className="h-8 px-3 text-xs" onClick={() => setShowCreate(true)}>
+              <Plus size={14} className="mr-1" /> Nova
+            </Button>
+          </div>
         )}
       </div>
 
