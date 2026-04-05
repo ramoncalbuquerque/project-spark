@@ -6,7 +6,7 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Card = Tables<"cards">;
 
-export type AssigneeInfo = { id: string; full_name: string | null; avatar_url: string | null };
+export type AssigneeInfo = { id: string; full_name: string | null; avatar_url: string | null; type: "profile" | "contact" };
 export type TeamInfo = { id: string; name: string };
 
 export type EnrichedFeedCard = Card & {
@@ -20,7 +20,7 @@ export type EnrichedFeedCard = Card & {
 
 export type FeedStatusFilter = "all" | "overdue" | "in_progress" | "completed";
 
-export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
+export function useFeedCards(statusFilter: FeedStatusFilter = "all", personFilter?: { id: string; type: "profile" | "contact" } | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -38,7 +38,6 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
 
       const cardIds = cards.map((c) => c.id);
 
-      // Enrich: assignees, teams, checklist counts, project names
       const assigneeMap = new Map<string, AssigneeInfo[]>();
       const teamMap = new Map<string, TeamInfo[]>();
       const checklistMap = new Map<string, { total: number; done: number }>();
@@ -49,7 +48,7 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
       try {
         const promises: PromiseLike<void>[] = [];
 
-        // Assignees
+        // Profile assignees
         promises.push(
           supabase
             .from("card_assignees")
@@ -57,10 +56,27 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
             .in("card_id", cardIds)
             .then(({ data }) => {
               for (const row of data ?? []) {
-                const p = row.profiles as unknown as AssigneeInfo | null;
+                const p = row.profiles as unknown as { id: string; full_name: string | null; avatar_url: string | null } | null;
                 if (!p) continue;
                 const list = assigneeMap.get(row.card_id) ?? [];
-                list.push(p);
+                list.push({ ...p, type: "profile" });
+                assigneeMap.set(row.card_id, list);
+              }
+            })
+        );
+
+        // Contact assignees
+        promises.push(
+          supabase
+            .from("card_contact_assignees")
+            .select("card_id, contact_id, contacts(id, full_name)")
+            .in("card_id", cardIds)
+            .then(({ data }) => {
+              for (const row of data ?? []) {
+                const c = row.contacts as unknown as { id: string; full_name: string } | null;
+                if (!c) continue;
+                const list = assigneeMap.get(row.card_id) ?? [];
+                list.push({ id: c.id, full_name: c.full_name, avatar_url: null, type: "contact" });
                 assigneeMap.set(row.card_id, list);
               }
             })
@@ -83,7 +99,7 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
             })
         );
 
-        // Checklist (agenda_items)
+        // Checklist
         promises.push(
           supabase
             .from("agenda_items")
@@ -142,12 +158,21 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
     enabled: !!user,
   });
 
-  // Client-side filter
+  // Client-side filters
   const cards = allCards.filter((card) => {
-    if (statusFilter === "all") return true;
-    if (statusFilter === "overdue") return card.is_overdue;
-    if (statusFilter === "in_progress") return card.status === "in_progress";
-    if (statusFilter === "completed") return card.status === "completed";
+    // Status filter
+    if (statusFilter === "overdue" && !card.is_overdue) return false;
+    if (statusFilter === "in_progress" && card.status !== "in_progress") return false;
+    if (statusFilter === "completed" && card.status !== "completed") return false;
+
+    // Person filter
+    if (personFilter) {
+      const hasAssignee = card.assignees.some(
+        (a) => a.id === personFilter.id && a.type === personFilter.type
+      );
+      if (!hasAssignee) return false;
+    }
+
     return true;
   });
 
@@ -156,7 +181,17 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["feed-cards"] });
 
   const createQuickTask = useMutation({
-    mutationFn: async ({ title, start_date, assignee_ids }: { title: string; start_date: string; assignee_ids?: string[] }) => {
+    mutationFn: async ({
+      title,
+      start_date,
+      assignee_profile_ids,
+      assignee_contact_ids,
+    }: {
+      title: string;
+      start_date: string;
+      assignee_profile_ids?: string[];
+      assignee_contact_ids?: string[];
+    }) => {
       if (!user) throw new Error("Não autenticado");
       const { data, error } = await supabase
         .from("cards")
@@ -171,11 +206,26 @@ export function useFeedCards(statusFilter: FeedStatusFilter = "all") {
         .single();
       if (error) throw error;
 
-      if (assignee_ids && assignee_ids.length > 0) {
-        const { error: assignError } = await supabase
-          .from("card_assignees")
-          .insert(assignee_ids.map((pid) => ({ card_id: data.id, profile_id: pid })));
-        if (assignError) console.warn("Failed to assign:", assignError);
+      const inserts: Promise<unknown>[] = [];
+
+      if (assignee_profile_ids && assignee_profile_ids.length > 0) {
+        inserts.push(
+          supabase
+            .from("card_assignees")
+            .insert(assignee_profile_ids.map((pid) => ({ card_id: data.id, profile_id: pid })))
+        );
+      }
+
+      if (assignee_contact_ids && assignee_contact_ids.length > 0) {
+        inserts.push(
+          supabase
+            .from("card_contact_assignees")
+            .insert(assignee_contact_ids.map((cid) => ({ card_id: data.id, contact_id: cid })))
+        );
+      }
+
+      if (inserts.length > 0) {
+        await Promise.all(inserts);
       }
 
       return data;

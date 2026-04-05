@@ -10,21 +10,28 @@ import AssigneeSelector from "@/components/shared/AssigneeSelector";
 import type { UseMutationResult } from "@tanstack/react-query";
 
 interface QuickCreateBarProps {
-  createQuickTask: UseMutationResult<unknown, Error, { title: string; start_date: string; assignee_ids?: string[] }>;
+  createQuickTask: UseMutationResult<unknown, Error, {
+    title: string;
+    start_date: string;
+    assignee_profile_ids?: string[];
+    assignee_contact_ids?: string[];
+  }>;
 }
 
 export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState<Date>(new Date());
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [profileIds, setProfileIds] = useState<string[]>([]);
+  const [contactIds, setContactIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = () => {
     setExpanded(false);
     setTitle("");
     setDate(new Date());
-    setAssigneeIds([]);
+    setProfileIds([]);
+    setContactIds([]);
   };
 
   const handleCreate = () => {
@@ -33,7 +40,8 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
       {
         title: title.trim(),
         start_date: date.toISOString(),
-        assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
+        assignee_profile_ids: profileIds.length > 0 ? profileIds : undefined,
+        assignee_contact_ids: contactIds.length > 0 ? contactIds : undefined,
       },
       { onSuccess: handleClose }
     );
@@ -92,8 +100,10 @@ export default function QuickCreateBar({ createQuickTask }: QuickCreateBarProps)
           </Popover>
 
           <AssigneeSelector
-            selected={assigneeIds}
-            onChange={setAssigneeIds}
+            selectedProfiles={profileIds}
+            selectedContacts={contactIds}
+            onChangeProfiles={setProfileIds}
+            onChangeContacts={setContactIds}
             compact
           />
 

@@ -108,7 +108,9 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
               style={{ marginLeft: i > 0 ? -8 : 0, zIndex: 2 - i }}
             >
               <AvatarImage src={a.avatar_url ?? undefined} />
-              <AvatarFallback className="text-[10px] bg-muted">
+              <AvatarFallback
+                className={`text-[10px] ${a.type === "contact" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}
+              >
                 {(a.full_name ?? "?").charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>

@@ -7,10 +7,12 @@ import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 type Card = Tables<"cards">;
 
 export type AssigneeInfo = { id: string; full_name: string | null; avatar_url: string | null };
+export type ContactAssigneeInfo = { id: string; full_name: string; avatar_url: null };
 export type TeamInfo = { id: string; name: string };
 
 export type DetailedCard = Card & {
   assignees: AssigneeInfo[];
+  contact_assignees: ContactAssigneeInfo[];
   teams: TeamInfo[];
   project_name: string | null;
   ritual_name: string | null;
@@ -33,11 +35,14 @@ export function useTaskDetail(cardId: string | undefined) {
       if (error) throw error;
       const c = data as Card;
 
-      // Enrich in parallel
-      const [assigneesRes, teamsRes] = await Promise.all([
+      const [assigneesRes, contactAssigneesRes, teamsRes] = await Promise.all([
         supabase
           .from("card_assignees")
           .select("profile_id, profiles(id, full_name, avatar_url)")
+          .eq("card_id", cardId),
+        supabase
+          .from("card_contact_assignees")
+          .select("contact_id, contacts(id, full_name)")
           .eq("card_id", cardId),
         supabase
           .from("card_teams")
@@ -48,6 +53,13 @@ export function useTaskDetail(cardId: string | undefined) {
       const assignees: AssigneeInfo[] = (assigneesRes.data ?? [])
         .map((r) => r.profiles as unknown as AssigneeInfo)
         .filter(Boolean);
+
+      const contact_assignees: ContactAssigneeInfo[] = (contactAssigneesRes.data ?? [])
+        .map((r) => {
+          const ct = r.contacts as unknown as { id: string; full_name: string } | null;
+          return ct ? { id: ct.id, full_name: ct.full_name, avatar_url: null as null } : null;
+        })
+        .filter(Boolean) as ContactAssigneeInfo[];
 
       const teams: TeamInfo[] = (teamsRes.data ?? [])
         .map((r) => r.teams as unknown as TeamInfo)
@@ -76,7 +88,7 @@ export function useTaskDetail(cardId: string | undefined) {
         }
       }
 
-      return { ...c, assignees, teams, project_name, ritual_name };
+      return { ...c, assignees, contact_assignees, teams, project_name, ritual_name };
     },
     enabled: !!cardId && !!user,
   });
@@ -105,12 +117,22 @@ export function useTaskDetail(cardId: string | undefined) {
   });
 
   const updateAssignees = useMutation({
-    mutationFn: async (profileIds: string[]) => {
+    mutationFn: async ({ profileIds, contactIds }: { profileIds: string[]; contactIds: string[] }) => {
       if (!cardId) throw new Error("No card");
+
+      // Sync profile assignees
       await supabase.from("card_assignees").delete().eq("card_id", cardId);
       if (profileIds.length > 0) {
         await supabase.from("card_assignees").insert(
           profileIds.map((pid) => ({ card_id: cardId, profile_id: pid }))
+        );
+      }
+
+      // Sync contact assignees
+      await supabase.from("card_contact_assignees").delete().eq("card_id", cardId);
+      if (contactIds.length > 0) {
+        await supabase.from("card_contact_assignees").insert(
+          contactIds.map((cid) => ({ card_id: cardId, contact_id: cid }))
         );
       }
     },

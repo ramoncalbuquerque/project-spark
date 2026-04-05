@@ -9,12 +9,20 @@ import { useAssigneeOptions, type AssigneeOption } from "@/hooks/useAssigneeOpti
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AssigneeSelectorProps {
-  selected: string[];
-  onChange: (ids: string[]) => void;
+  selectedProfiles: string[];
+  selectedContacts: string[];
+  onChangeProfiles: (ids: string[]) => void;
+  onChangeContacts: (ids: string[]) => void;
   compact?: boolean;
 }
 
-export default function AssigneeSelector({ selected, onChange, compact }: AssigneeSelectorProps) {
+export default function AssigneeSelector({
+  selectedProfiles,
+  selectedContacts,
+  onChangeProfiles,
+  onChangeContacts,
+  compact,
+}: AssigneeSelectorProps) {
   const { user } = useAuth();
   const { options } = useAssigneeOptions();
   const [open, setOpen] = useState(false);
@@ -24,17 +32,26 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
     o.full_name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const selectedOptions = selected
-    .map((id) => options.find((o) => o.id === id))
-    .filter(Boolean) as AssigneeOption[];
+  const isSelected = (o: AssigneeOption) =>
+    o.type === "profile"
+      ? selectedProfiles.includes(o.id)
+      : selectedContacts.includes(o.id);
+
+  const allSelected = options.filter(isSelected);
 
   const toggle = (o: AssigneeOption) => {
-    // Contacts can't be assigned (FK constraint on card_assignees → profiles)
-    if (o.type === "contact") return;
-    if (selected.includes(o.id)) {
-      onChange(selected.filter((s) => s !== o.id));
+    if (o.type === "profile") {
+      if (selectedProfiles.includes(o.id)) {
+        onChangeProfiles(selectedProfiles.filter((s) => s !== o.id));
+      } else {
+        onChangeProfiles([...selectedProfiles, o.id]);
+      }
     } else {
-      onChange([...selected, o.id]);
+      if (selectedContacts.includes(o.id)) {
+        onChangeContacts(selectedContacts.filter((s) => s !== o.id));
+      } else {
+        onChangeContacts([...selectedContacts, o.id]);
+      }
     }
   };
 
@@ -47,15 +64,15 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
             <UserPlus size={14} />
-            {selectedOptions.length > 0
-              ? selectedOptions.map((o) => getLabel(o)).join(", ")
+            {allSelected.length > 0
+              ? allSelected.map((o) => getLabel(o)).join(", ")
               : "Responsável"}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-64 p-0" align="start">
           <DropdownBody
             filtered={filtered}
-            selected={selected}
+            isSelected={isSelected}
             toggle={toggle}
             search={search}
             setSearch={setSearch}
@@ -70,10 +87,14 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
   return (
     <div>
       <span className="text-muted-foreground text-xs block mb-1">Responsáveis</span>
-      {selectedOptions.length > 0 && (
+      {allSelected.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {selectedOptions.map((o) => (
-            <Badge key={o.id} variant="secondary" className="text-[11px] gap-1 pr-1">
+          {allSelected.map((o) => (
+            <Badge
+              key={o.id}
+              variant="secondary"
+              className={`text-[11px] gap-1 pr-1 ${o.type === "contact" ? "bg-muted text-muted-foreground" : ""}`}
+            >
               {getLabel(o)}
               <button onClick={() => toggle(o)} className="ml-0.5 hover:text-destructive">
                 <X size={12} />
@@ -91,7 +112,7 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
         <PopoverContent className="w-64 p-0" align="start">
           <DropdownBody
             filtered={filtered}
-            selected={selected}
+            isSelected={isSelected}
             toggle={toggle}
             search={search}
             setSearch={setSearch}
@@ -106,7 +127,7 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
 
 function DropdownBody({
   filtered,
-  selected,
+  isSelected,
   toggle,
   search,
   setSearch,
@@ -114,7 +135,7 @@ function DropdownBody({
   userId,
 }: {
   filtered: AssigneeOption[];
-  selected: string[];
+  isSelected: (o: AssigneeOption) => boolean;
   toggle: (o: AssigneeOption) => void;
   search: string;
   setSearch: (s: string) => void;
@@ -137,18 +158,19 @@ function DropdownBody({
           <p className="text-xs text-muted-foreground text-center py-3">Nenhum resultado</p>
         )}
         {filtered.map((o) => {
-          const isSelected = selected.includes(o.id);
+          const sel = isSelected(o);
           const label = getLabel(o);
           return (
             <button
               key={o.id}
               onClick={() => toggle(o)}
-              disabled={o.type === "contact"}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-xs transition-colors ${o.type === "contact" ? "opacity-50 cursor-not-allowed" : "hover:bg-accent"} ${isSelected ? "bg-accent/60" : ""}`}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-xs transition-colors hover:bg-accent ${sel ? "bg-accent/60" : ""}`}
             >
               <Avatar className="h-5 w-5">
                 <AvatarImage src={o.avatar_url ?? undefined} />
-                <AvatarFallback className="text-[9px] bg-muted">
+                <AvatarFallback
+                  className={`text-[9px] ${o.type === "contact" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}
+                >
                   {o.full_name.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
@@ -159,7 +181,7 @@ function DropdownBody({
               {o.type === "profile" && o.id !== userId && (
                 <span className="text-[9px] text-muted-foreground bg-muted px-1 rounded">conta</span>
               )}
-              {isSelected && (
+              {sel && (
                 <span className="text-[10px] text-primary font-medium">✓</span>
               )}
             </button>
