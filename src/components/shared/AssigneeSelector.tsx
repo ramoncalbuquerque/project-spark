@@ -28,11 +28,13 @@ export default function AssigneeSelector({ selected, onChange, compact }: Assign
     .map((id) => options.find((o) => o.id === id))
     .filter(Boolean) as AssigneeOption[];
 
-  const toggle = (id: string) => {
-    if (selected.includes(id)) {
-      onChange(selected.filter((s) => s !== id));
+  const toggle = (o: AssigneeOption) => {
+    // Contacts can't be assigned (FK constraint on card_assignees → profiles)
+    if (o.type === "contact") return;
+    if (selected.includes(o.id)) {
+      onChange(selected.filter((s) => s !== o.id));
     } else {
-      onChange([...selected, id]);
+      onChange([...selected, o.id]);
     }
   };
 
