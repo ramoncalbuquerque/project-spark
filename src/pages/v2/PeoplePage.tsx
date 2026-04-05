@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, Network, Upload, Download, ChevronRight, ChevronDown,
-  ArrowLeft, User, Phone, Loader2, X,
+  Search, Network, Upload, Download, ChevronRight,
+  ArrowLeft, User, Phone, Loader2, Users, Building2, Layers,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import {
+  Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator, BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePeople, type UnifiedPerson } from "@/hooks/usePeople";
 import { useOrgImport } from "@/hooks/useOrgImport";
@@ -23,30 +26,130 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useRef } from "react";
 
-type View = "list" | "orgchart";
+/* ── Nav Stack Types ── */
+type NavItem =
+  | { type: "list" }
+  | { type: "departments" }
+  | { type: "dept"; name: string }
+  | { type: "person"; id: string };
 
+/* ── Helpers ── */
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+}
+
+function deptColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 45%, 55%)`;
+}
+
+function findSubordinates(person: UnifiedPerson, people: UnifiedPerson[]): UnifiedPerson[] {
+  return people.filter((p) => {
+    if (p.id === person.id) return false;
+    if (p.superior_id === person.id) return true;
+    if (p.superior_name && person.full_name && p.superior_name.toLowerCase().trim() === person.full_name.toLowerCase().trim()) return true;
+    return false;
+  });
+}
+
+function findDeptLeader(deptPeople: UnifiedPerson[]): UnifiedPerson | null {
+  const high = deptPeople.find((p) => p.hierarchy_level === "alto");
+  if (high) return high;
+  const noSuperiorInDept = deptPeople.find((p) => {
+    if (!p.superior_id && !p.superior_name) return true;
+    const superiorInDept = deptPeople.find((s) =>
+      s.id !== p.id && (s.id === p.superior_id || (p.superior_name && s.full_name.toLowerCase().trim() === p.superior_name.toLowerCase().trim()))
+    );
+    return !superiorInDept;
+  });
+  return noSuperiorInDept ?? deptPeople[0] ?? null;
+}
+
+/* ── Main Page ── */
 const PeoplePage = () => {
-  const [view, setView] = useState<View>("list");
+  const [navStack, setNavStack] = useState<NavItem[]>([{ type: "list" }]);
   const { profile } = useAuth();
   const isLeader = profile?.role === "leader";
+  const { people, departments, stats, isLoading, refetch } = usePeople();
 
-  if (view === "orgchart") return <OrgChartView onBack={() => setView("list")} />;
-  return <ListView onOrgChart={() => setView("orgchart")} isLeader={isLeader} />;
+  // Modal states elevated here for all views
+  const [accountModal, setAccountModal] = useState<UnifiedPerson | null>(null);
+  const [phoneModal, setPhoneModal] = useState<UnifiedPerson | null>(null);
+
+  const current = navStack[navStack.length - 1];
+  const pushNav = useCallback((item: NavItem) => setNavStack((prev) => [...prev, item]), []);
+  const popNav = useCallback(() => setNavStack((prev) => prev.length > 1 ? prev.slice(0, -1) : prev), []);
+
+  const sharedProps = { people, isLeader, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
+
+  let content: React.ReactNode;
+  switch (current.type) {
+    case "list":
+      content = (
+        <ListView
+          onOrgChart={() => setNavStack([{ type: "departments" }])}
+          isLeader={isLeader}
+          people={people}
+          departments={departments}
+          stats={stats}
+          isLoading={isLoading}
+          refetch={refetch}
+          onAccountAction={setAccountModal}
+          onPhoneAction={setPhoneModal}
+        />
+      );
+      break;
+    case "departments":
+      content = <DepartmentsView {...sharedProps} departments={departments} isLoading={isLoading} />;
+      break;
+    case "dept":
+      content = <DepartmentDetailView {...sharedProps} deptName={current.name} navStack={navStack} />;
+      break;
+    case "person":
+      content = <PersonDetailView {...sharedProps} personId={current.id} navStack={navStack} />;
+      break;
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {content}
+
+      {accountModal && (
+        <AccountActionModal
+          person={accountModal}
+          people={people}
+          onClose={() => setAccountModal(null)}
+          onSuccess={refetch}
+        />
+      )}
+      {phoneModal && (
+        <PhoneEditModal
+          person={phoneModal}
+          onClose={() => setPhoneModal(null)}
+          onSuccess={refetch}
+        />
+      )}
+    </div>
+  );
 };
 
 /* ── List View ── */
-function ListView({ onOrgChart, isLeader }: { onOrgChart: () => void; isLeader: boolean }) {
+function ListView({
+  onOrgChart, isLeader, people, departments, stats, isLoading, refetch, onAccountAction, onPhoneAction,
+}: {
+  onOrgChart: () => void; isLeader: boolean; people: UnifiedPerson[]; departments: string[];
+  stats: { withAccount: number; withoutAccount: number; withoutPhone: number };
+  isLoading: boolean; refetch: () => void;
+  onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
+}) {
   const navigate = useNavigate();
-  const { people, departments, stats, isLoading, refetch } = usePeople();
   const { importCsv, downloadTemplate, isImporting, result } = useOrgImport();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<string | null>(null);
-
-  // Modal states
-  const [accountModal, setAccountModal] = useState<UnifiedPerson | null>(null);
-  const [phoneModal, setPhoneModal] = useState<UnifiedPerson | null>(null);
 
   const filtered = useMemo(() => {
     let list = people;
@@ -57,33 +160,6 @@ function ListView({ onOrgChart, isLeader }: { onOrgChart: () => void; isLeader: 
     if (deptFilter) list = list.filter((p) => p.department === deptFilter);
     return list;
   }, [people, search, deptFilter]);
-
-  // Build tree for department filter
-  const tree = useMemo(() => {
-    if (!deptFilter) return null;
-    const deptPeople = filtered;
-    const idMap = new Map<string, UnifiedPerson>();
-    const nameMap = new Map<string, UnifiedPerson>();
-    for (const p of deptPeople) {
-      idMap.set(p.id, p);
-      nameMap.set(p.full_name.toLowerCase().trim(), p);
-    }
-
-    const childrenMap = new Map<string, UnifiedPerson[]>();
-    for (const p of deptPeople) {
-      let parentId: string | null = null;
-      if (p.superior_id && idMap.has(p.superior_id)) parentId = p.superior_id;
-      else if (p.superior_name) {
-        const sup = nameMap.get(p.superior_name.toLowerCase().trim());
-        if (sup) parentId = sup.id;
-      }
-      const key = parentId ?? "__root__";
-      const list = childrenMap.get(key) ?? [];
-      list.push(p);
-      childrenMap.set(key, list);
-    }
-    return childrenMap;
-  }, [filtered, deptFilter]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,7 +173,6 @@ function ListView({ onOrgChart, isLeader }: { onOrgChart: () => void; isLeader: 
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Top actions */}
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={onOrgChart} className="gap-1.5">
           <Network className="h-4 w-4" /> Organograma
@@ -116,7 +191,6 @@ function ListView({ onOrgChart, isLeader }: { onOrgChart: () => void; isLeader: 
         )}
       </div>
 
-      {/* Counters */}
       {totalPeople > 0 && (
         <p className="text-[11px] text-muted-foreground -mt-1">
           {totalPeople} pessoa{totalPeople !== 1 ? "s" : ""} · {stats.withAccount} com conta · {stats.withoutAccount} sem conta · {stats.withoutPhone} sem telefone
@@ -132,13 +206,11 @@ function ListView({ onOrgChart, isLeader }: { onOrgChart: () => void; isLeader: 
         </div>
       )}
 
-      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Buscar por nome..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
       </div>
 
-      {/* Department chips */}
       {departments.length > 0 && (
         <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
           <button onClick={() => setDeptFilter(null)} className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${!deptFilter ? "bg-primary text-primary-foreground" : "bg-accent text-foreground"}`}>
@@ -152,79 +224,39 @@ function ListView({ onOrgChart, isLeader }: { onOrgChart: () => void; isLeader: 
         </div>
       )}
 
-      {/* People list */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="flex flex-col gap-1">
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">Nenhuma pessoa encontrada</p>
-          ) : deptFilter && tree ? (
-            // Tree view for department filter
-            (tree.get("__root__") ?? []).map((person) => (
-              <TreeNode
-                key={person.id}
-                person={person}
-                childrenMap={tree}
-                level={0}
-                onAccountAction={setAccountModal}
-                onPhoneAction={setPhoneModal}
-                isLeader={isLeader}
-              />
-            ))
           ) : (
-            // Flat list
             filtered.map((person) => (
               <PersonCard
                 key={person.id}
                 person={person}
                 onClick={() => person.has_account ? navigate(`/app/feed?person=${person.id}`) : undefined}
-                onAccountAction={setAccountModal}
-                onPhoneAction={setPhoneModal}
+                onAccountAction={onAccountAction}
+                onPhoneAction={onPhoneAction}
                 isLeader={isLeader}
               />
             ))
           )}
         </div>
       </ScrollArea>
-
-      {/* Account modal */}
-      {accountModal && (
-        <AccountActionModal
-          person={accountModal}
-          people={people}
-          onClose={() => setAccountModal(null)}
-          onSuccess={refetch}
-        />
-      )}
-
-      {/* Phone modal */}
-      {phoneModal && (
-        <PhoneEditModal
-          person={phoneModal}
-          onClose={() => setPhoneModal(null)}
-          onSuccess={refetch}
-        />
-      )}
     </div>
   );
 }
 
-/* ── Person Card ── */
+/* ── Person Card (reusable) ── */
 function PersonCard({
-  person,
-  onClick,
-  onAccountAction,
-  onPhoneAction,
-  isLeader,
+  person, onClick, onAccountAction, onPhoneAction, isLeader, showDept, showChevron, badge,
 }: {
-  person: UnifiedPerson;
-  onClick?: () => void;
-  onAccountAction: (p: UnifiedPerson) => void;
-  onPhoneAction: (p: UnifiedPerson) => void;
-  isLeader: boolean;
+  person: UnifiedPerson; onClick?: () => void;
+  onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
+  isLeader: boolean; showDept?: boolean; showChevron?: boolean; badge?: string;
 }) {
-  const initials = person.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const initials = getInitials(person.full_name);
 
   return (
     <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent/60 transition-colors">
@@ -234,11 +266,14 @@ function PersonCard({
           <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{person.full_name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-foreground truncate">{person.full_name}</p>
+            {badge && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary">{badge}</Badge>}
+          </div>
           <p className="text-xs text-muted-foreground truncate">
             {person.position || ""}
-            {person.position && person.department ? " · " : ""}
-            {person.department || ""}
+            {person.position && (showDept ? person.department : "") ? " · " : ""}
+            {showDept ? (person.department || "") : ""}
           </p>
         </div>
       </button>
@@ -249,95 +284,493 @@ function PersonCard({
         {person.overdue_count > 0 && (
           <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] px-1.5">{person.overdue_count}</Badge>
         )}
-        <button
-          onClick={(e) => { e.stopPropagation(); if (!person.has_account && isLeader) onAccountAction(person); }}
-          className="p-1"
-          title={person.has_account ? "Tem conta" : "Sem conta"}
-        >
-          <User size={16} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); if (!person.has_phone && isLeader) onPhoneAction(person); }}
-          className="p-1"
-          title={person.has_phone ? "Tem telefone" : "Sem telefone"}
-        >
-          <Phone size={16} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
-        </button>
+        {!showChevron && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); if (!person.has_account && isLeader) onAccountAction(person); }} className="p-1" title={person.has_account ? "Tem conta" : "Sem conta"}>
+              <User size={16} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); if (!person.has_phone && isLeader) onPhoneAction(person); }} className="p-1" title={person.has_phone ? "Tem telefone" : "Sem telefone"}>
+              <Phone size={16} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
+            </button>
+          </>
+        )}
+        {showChevron && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </div>
     </div>
   );
 }
 
-/* ── Tree Node (for department view) ── */
-function TreeNode({
-  person,
-  childrenMap,
-  level,
-  onAccountAction,
-  onPhoneAction,
-  isLeader,
-}: {
-  person: UnifiedPerson;
-  childrenMap: Map<string, UnifiedPerson[]>;
-  level: number;
-  onAccountAction: (p: UnifiedPerson) => void;
-  onPhoneAction: (p: UnifiedPerson) => void;
-  isLeader: boolean;
+/* ── Status Icons (small inline) ── */
+function StatusIcons({ person, isLeader, onAccountAction, onPhoneAction }: {
+  person: UnifiedPerson; isLeader: boolean;
+  onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
-  const children = childrenMap.get(person.id) ?? [];
-  const hasChildren = children.length > 0;
-  const isLowLevel = person.hierarchy_level === "baixo";
-  const [expanded, setExpanded] = useState(!isLowLevel);
+  return (
+    <div className="flex items-center gap-1.5">
+      <button onClick={() => { if (!person.has_account && isLeader) onAccountAction(person); }} className="p-0.5">
+        <User size={14} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
+      </button>
+      <button onClick={() => { if (!person.has_phone && isLeader) onPhoneAction(person); }} className="p-0.5">
+        <Phone size={14} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
+      </button>
+    </div>
+  );
+}
 
-  const initials = person.full_name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+/* ── Nav Breadcrumb ── */
+function NavBreadcrumb({ navStack, people }: { navStack: NavItem[]; people: UnifiedPerson[] }) {
+  if (navStack.length <= 1) return null;
+  return (
+    <Breadcrumb className="mb-2">
+      <BreadcrumbList>
+        {navStack.map((item, idx) => {
+          const isLast = idx === navStack.length - 1;
+          let label = "";
+          switch (item.type) {
+            case "list": label = "Pessoas"; break;
+            case "departments": label = "HOT SAT"; break;
+            case "dept": label = item.name; break;
+            case "person": {
+              const p = people.find((pp) => pp.id === item.id);
+              label = p?.full_name ?? "Pessoa";
+              break;
+            }
+          }
+          return (
+            <BreadcrumbItem key={idx}>
+              {isLast ? <BreadcrumbPage>{label}</BreadcrumbPage> : <BreadcrumbLink className="text-xs">{label}</BreadcrumbLink>}
+              {!isLast && <BreadcrumbSeparator />}
+            </BreadcrumbItem>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+/* ── Departments View ── */
+function DepartmentsView({
+  people, departments, isLoading, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+}: {
+  people: UnifiedPerson[]; departments: string[]; isLoading: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
+}) {
+  const [search, setSearch] = useState("");
+
+  const hierarchyLevels = useMemo(() => {
+    const levels = new Set(people.map((p) => p.hierarchy_level).filter(Boolean));
+    return levels.size;
+  }, [people]);
+
+  const deptData = useMemo(() => {
+    return departments.map((d) => {
+      const deptPeople = people.filter((p) => p.department === d);
+      const leader = findDeptLeader(deptPeople);
+      return { name: d, count: deptPeople.length, leader };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [people, departments]);
+
+  const searchResults = useMemo(() => {
+    if (!search) return null;
+    const q = search.toLowerCase();
+    return people.filter((p) => p.full_name.toLowerCase().includes(q));
+  }, [people, search]);
 
   return (
-    <div>
-      <div
-        className="flex items-center gap-2 py-2 hover:bg-accent/40 transition-colors rounded"
-        style={{ paddingLeft: `${level * 20 + 8}px` }}
-      >
-        {hasChildren ? (
-          <button onClick={() => setExpanded(!expanded)} className="shrink-0 p-0.5">
-            {expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-          </button>
-        ) : (
-          <span className="w-4.5 shrink-0" />
-        )}
-        <Avatar className="h-8 w-8">
-          <AvatarImage src={person.avatar_url ?? undefined} />
-          <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{initials}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{person.full_name}</p>
-          {person.position && <p className="text-[11px] text-muted-foreground truncate">{person.position}</p>}
+    <div className="flex flex-col h-full gap-3">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={popNav}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-base font-semibold text-foreground">Organograma HOT SAT</h2>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar por nome..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+      </div>
+
+      {/* Counters */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg border border-border p-3 text-center">
+          <Users className="h-4 w-4 mx-auto mb-1 text-primary" />
+          <p className="text-lg font-semibold text-foreground">{people.length}</p>
+          <p className="text-[10px] text-muted-foreground">Total</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 pr-2">
-          <button
-            onClick={() => { if (!person.has_account && isLeader) onAccountAction(person); }}
-            className="p-0.5"
-          >
-            <User size={14} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
-          </button>
-          <button
-            onClick={() => { if (!person.has_phone && isLeader) onPhoneAction(person); }}
-            className="p-0.5"
-          >
-            <Phone size={14} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
-          </button>
+        <div className="rounded-lg border border-border p-3 text-center">
+          <Building2 className="h-4 w-4 mx-auto mb-1 text-primary" />
+          <p className="text-lg font-semibold text-foreground">{departments.length}</p>
+          <p className="text-[10px] text-muted-foreground">Departamentos</p>
+        </div>
+        <div className="rounded-lg border border-border p-3 text-center">
+          <Layers className="h-4 w-4 mx-auto mb-1 text-primary" />
+          <p className="text-lg font-semibold text-foreground">{hierarchyLevels}</p>
+          <p className="text-[10px] text-muted-foreground">Níveis</p>
         </div>
       </div>
-      {expanded && children.map((child) => (
-        <TreeNode
-          key={child.id}
-          person={child}
-          childrenMap={childrenMap}
-          level={level + 1}
-          onAccountAction={onAccountAction}
-          onPhoneAction={onPhoneAction}
-          isLeader={isLeader}
-        />
-      ))}
+
+      <ScrollArea className="flex-1 min-h-0">
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        ) : searchResults ? (
+          <div className="flex flex-col gap-1">
+            {searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma pessoa encontrada</p>
+            ) : (
+              searchResults.map((p) => (
+                <PersonCard
+                  key={p.id}
+                  person={p}
+                  onClick={() => pushNav({ type: "person", id: p.id })}
+                  onAccountAction={onAccountAction}
+                  onPhoneAction={onPhoneAction}
+                  isLeader={isLeader}
+                  showDept
+                  showChevron
+                />
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {deptData.map((dept) => {
+              const deptInitials = dept.name.slice(0, 2).toUpperCase();
+              return (
+                <button
+                  key={dept.name}
+                  onClick={() => pushNav({ type: "dept", name: dept.name })}
+                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-accent/60 transition-colors w-full"
+                >
+                  <div
+                    className="h-10 w-10 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                    style={{ backgroundColor: deptColor(dept.name) }}
+                  >
+                    {deptInitials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{dept.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {dept.leader?.full_name ?? "Sem líder"} · {dept.count} pessoa{dept.count !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              );
+            })}
+            {deptData.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhum departamento encontrado</p>
+            )}
+          </div>
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
+/* ── Department Detail View ── */
+function DepartmentDetailView({
+  people, deptName, navStack, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+}: {
+  people: UnifiedPerson[]; deptName: string; navStack: NavItem[];
+  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
+}) {
+  const deptPeople = useMemo(() => people.filter((p) => p.department === deptName), [people, deptName]);
+  const leader = useMemo(() => findDeptLeader(deptPeople), [deptPeople]);
+
+  const levelCounts = useMemo(() => {
+    const counts = { alto: 0, medio: 0, baixo: 0 };
+    for (const p of deptPeople) {
+      if (p.hierarchy_level === "alto") counts.alto++;
+      else if (p.hierarchy_level === "medio" || p.hierarchy_level === "médio") counts.medio++;
+      else if (p.hierarchy_level === "baixo") counts.baixo++;
+    }
+    return counts;
+  }, [deptPeople]);
+
+  const { reportsToLeader, others } = useMemo(() => {
+    if (!leader) return { reportsToLeader: [] as UnifiedPerson[], others: deptPeople };
+    const reports = findSubordinates(leader, deptPeople);
+    const reportIds = new Set([leader.id, ...reports.map((r) => r.id)]);
+    const rest = deptPeople.filter((p) => !reportIds.has(p.id));
+    return { reportsToLeader: reports, others: rest };
+  }, [deptPeople, leader]);
+
+  return (
+    <div className="flex flex-col h-full gap-3">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={popNav}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-base font-semibold text-foreground truncate">{deptName}</h2>
+      </div>
+
+      <NavBreadcrumb navStack={navStack} people={people} />
+
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="flex flex-col gap-3">
+          {/* Leader card */}
+          {leader && (
+            <button
+              onClick={() => pushNav({ type: "person", id: leader.id })}
+              className="flex items-center gap-3 rounded-r-xl py-3 px-3 text-left transition-colors hover:bg-primary/10 bg-primary/5 border-l-[3px] border-primary w-full"
+            >
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={leader.avatar_url ?? undefined} />
+                <AvatarFallback className="text-xs bg-primary/10 text-primary">{getInitials(leader.full_name)}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-[15px] font-medium text-foreground truncate">{leader.full_name}</p>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary">líder</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground truncate">{leader.position || "Sem cargo"}</p>
+              </div>
+              <StatusIcons person={leader} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+            </button>
+          )}
+
+          {/* Counters */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { label: "Total", value: deptPeople.length },
+              { label: "Alto", value: levelCounts.alto },
+              { label: "Médio", value: levelCounts.medio },
+              { label: "Baixo", value: levelCounts.baixo },
+            ].map((c) => (
+              <div key={c.label} className="rounded-lg border border-border p-2 text-center">
+                <p className="text-base font-semibold text-foreground">{c.value}</p>
+                <p className="text-[10px] text-muted-foreground">{c.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Reports to leader */}
+          {reportsToLeader.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1 px-1">
+                Reportam a {leader?.full_name ?? "líder"} ({reportsToLeader.length})
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {reportsToLeader.map((p) => {
+                  const subs = findSubordinates(p, people);
+                  const hasSubs = subs.length > 0;
+                  return (
+                    <div key={p.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/60 transition-colors">
+                      <button onClick={() => pushNav({ type: "person", id: p.id })} className="flex items-center gap-3 flex-1 min-w-0">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={p.avatar_url ?? undefined} />
+                          <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(p.full_name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium text-foreground truncate">{p.full_name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{p.position || ""}</p>
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasSubs ? (
+                          <>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{subs.length} pessoa{subs.length !== 1 ? "s" : ""}</Badge>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </>
+                        ) : (
+                          <StatusIcons person={p} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Others */}
+          {others.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1 px-1">
+                Outros no departamento ({others.length})
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {others.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/60 transition-colors">
+                    <button onClick={() => pushNav({ type: "person", id: p.id })} className="flex items-center gap-3 flex-1 min-w-0">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={p.avatar_url ?? undefined} />
+                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(p.full_name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium text-foreground truncate">{p.full_name}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{p.position || ""}</p>
+                      </div>
+                    </button>
+                    <StatusIcons person={p} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+/* ── Person Detail View ── */
+function PersonDetailView({
+  people, personId, navStack, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+}: {
+  people: UnifiedPerson[]; personId: string; navStack: NavItem[];
+  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
+}) {
+  const navigate = useNavigate();
+  const person = people.find((p) => p.id === personId);
+  if (!person) return <p className="text-sm text-muted-foreground text-center py-8">Pessoa não encontrada</p>;
+
+  const superior = person.superior_id ? people.find((p) => p.id === person.superior_id) : null;
+  const subordinates = findSubordinates(person, people);
+
+  const levelLabel: Record<string, string> = { alto: "Alto", medio: "Médio", médio: "Médio", baixo: "Baixo" };
+
+  return (
+    <div className="flex flex-col h-full gap-3">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={popNav}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-base font-semibold text-foreground truncate">{person.full_name}</h2>
+      </div>
+
+      <NavBreadcrumb navStack={navStack} people={people} />
+
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="flex flex-col gap-4">
+          {/* Profile card */}
+          <div className="rounded-xl border border-border p-4">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={person.avatar_url ?? undefined} />
+                <AvatarFallback className="text-sm bg-primary/10 text-primary">{getInitials(person.full_name)}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-medium text-foreground">{person.full_name}</p>
+                <p className="text-[13px] text-muted-foreground">{person.position || "Sem cargo"}</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {person.department && (
+                    <Badge variant="secondary" className="text-[10px]">{person.department}</Badge>
+                  )}
+                  {person.hierarchy_level && (
+                    <Badge variant="secondary" className="text-[10px]">{levelLabel[person.hierarchy_level] ?? person.hierarchy_level}</Badge>
+                  )}
+                  <Badge variant={person.has_account ? "default" : "secondary"} className={`text-[10px] ${person.has_account ? "bg-green-100 text-green-700 hover:bg-green-100" : ""}`}>
+                    {person.has_account ? "Conta ativa" : "Sem conta"}
+                  </Badge>
+                </div>
+                {person.phone && <p className="text-xs text-muted-foreground mt-2">📱 {person.phone}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+              onClick={() => navigate(`/app/feed?person=${person.id}`)}
+            >
+              Ver tarefas
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => toast.info("Em breve")}
+            >
+              Atribuir tarefa
+            </Button>
+          </div>
+
+          {/* Reports to */}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1 px-1">Reporta a</p>
+            {superior ? (
+              <button
+                onClick={() => pushNav({ type: "person", id: superior.id })}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/60 transition-colors w-full text-left"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={superior.avatar_url ?? undefined} />
+                  <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(superior.full_name)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{superior.full_name}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{superior.position || ""}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </button>
+            ) : (
+              <p className="text-sm text-muted-foreground px-3 py-2">Sem superior identificado</p>
+            )}
+          </div>
+
+          {/* Subordinates */}
+          {subordinates.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1 px-1">
+                Subordinados diretos ({subordinates.length})
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {subordinates.map((sub) => {
+                  const subSubs = findSubordinates(sub, people);
+                  const hasSubs = subSubs.length > 0;
+                  return (
+                    <div key={sub.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/60 transition-colors">
+                      <button onClick={() => pushNav({ type: "person", id: sub.id })} className="flex items-center gap-3 flex-1 min-w-0">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={sub.avatar_url ?? undefined} />
+                          <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(sub.full_name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{sub.full_name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{sub.position || ""}</p>
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasSubs ? (
+                          <>
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{subSubs.length}</Badge>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          </>
+                        ) : (
+                          <StatusIcons person={sub} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Account/Phone actions for this person */}
+          {isLeader && (!person.has_account || !person.has_phone) && (
+            <div className="flex gap-2 px-1">
+              {!person.has_account && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => onAccountAction(person)}>
+                  <User size={14} /> Criar conta
+                </Button>
+              )}
+              {!person.has_phone && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => onPhoneAction(person)}>
+                  <Phone size={14} /> Adicionar telefone
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -360,7 +793,6 @@ function AccountActionModal({
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Profiles not linked to any contact (available for linking)
   const availableProfiles = useMemo(() => {
     return people.filter((p) => p.has_account && !p.contact_id);
   }, [people]);
@@ -416,9 +848,7 @@ function AccountActionModal({
           <DialogTitle>
             {mode === "choose" ? "Criar ou vincular conta" : mode === "create" ? "Criar nova conta" : "Vincular conta existente"}
           </DialogTitle>
-          <DialogDescription>
-            {person.full_name}
-          </DialogDescription>
+          <DialogDescription>{person.full_name}</DialogDescription>
         </DialogHeader>
 
         {mode === "choose" && (
@@ -467,9 +897,7 @@ function AccountActionModal({
                 </SelectTrigger>
                 <SelectContent>
                   {availableProfiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-sm">
-                      {p.full_name}
-                    </SelectItem>
+                    <SelectItem key={p.id} value={p.id} className="text-sm">{p.full_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -490,13 +918,9 @@ function AccountActionModal({
 
 /* ── Phone Edit Modal ── */
 function PhoneEditModal({
-  person,
-  onClose,
-  onSuccess,
+  person, onClose, onSuccess,
 }: {
-  person: UnifiedPerson;
-  onClose: () => void;
-  onSuccess: () => void;
+  person: UnifiedPerson; onClose: () => void; onSuccess: () => void;
 }) {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
@@ -510,25 +934,14 @@ function PhoneEditModal({
 
   const handleSave = async () => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
-      toast.error("Telefone inválido");
-      return;
-    }
+    if (digits.length < 10) { toast.error("Telefone inválido"); return; }
     setSaving(true);
     try {
       if (person.has_account) {
-        // Update profile
-        const { error } = await supabase
-          .from("profiles")
-          .update({ phone: phone.trim() })
-          .eq("id", person.id);
+        const { error } = await supabase.from("profiles").update({ phone: phone.trim() }).eq("id", person.id);
         if (error) throw error;
       } else if (person.contact_id) {
-        // Update contact
-        const { error } = await supabase
-          .from("contacts")
-          .update({ phone: phone.trim() })
-          .eq("id", person.contact_id);
+        const { error } = await supabase.from("contacts").update({ phone: phone.trim() }).eq("id", person.contact_id);
         if (error) throw error;
       }
       toast.success("Telefone atualizado");
@@ -551,13 +964,7 @@ function PhoneEditModal({
         <div className="flex flex-col gap-3 py-2">
           <div>
             <Label className="text-xs">Celular</Label>
-            <Input
-              value={phone}
-              onChange={(e) => setPhone(formatPhone(e.target.value))}
-              className="h-9 text-sm mt-1"
-              placeholder="(99) 99999-9999"
-              autoFocus
-            />
+            <Input value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} className="h-9 text-sm mt-1" placeholder="(99) 99999-9999" autoFocus />
           </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
@@ -569,75 +976,6 @@ function PhoneEditModal({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/* ── Org Chart View ── */
-function OrgChartView({ onBack }: { onBack: () => void }) {
-  const { people, isLoading } = usePeople();
-  const { profile } = useAuth();
-  const isLeader = profile?.role === "leader";
-
-  const tree = useMemo(() => {
-    const nameMap = new Map<string, UnifiedPerson>();
-    const idMap = new Map<string, UnifiedPerson>();
-    for (const p of people) {
-      nameMap.set(p.full_name.toLowerCase().trim(), p);
-      idMap.set(p.id, p);
-    }
-
-    const childrenMap = new Map<string, UnifiedPerson[]>();
-    for (const p of people) {
-      let parentId: string | null = null;
-      if (p.superior_id && idMap.has(p.superior_id)) parentId = p.superior_id;
-      else if (p.superior_name) {
-        const superior = nameMap.get(p.superior_name.toLowerCase().trim());
-        if (superior) parentId = superior.id;
-      }
-      const key = parentId ?? "__root__";
-      const list = childrenMap.get(key) ?? [];
-      list.push(p);
-      childrenMap.set(key, list);
-    }
-    return childrenMap;
-  }, [people]);
-
-  const roots = tree.get("__root__") ?? [];
-
-  // Dummy handlers for org chart (no modals here, just visual)
-  const noop = () => {};
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-base font-semibold text-foreground">Organograma</h2>
-      </div>
-
-      {isLoading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-      ) : roots.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-12">Nenhum dado de hierarquia encontrado</p>
-      ) : (
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="flex flex-col">
-            {roots.map((person) => (
-              <TreeNode
-                key={person.id}
-                person={person}
-                childrenMap={tree}
-                level={0}
-                onAccountAction={noop}
-                onPhoneAction={noop}
-                isLeader={isLeader}
-              />
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-    </div>
   );
 }
 
