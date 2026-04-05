@@ -42,7 +42,7 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
   return (
     <button
       onClick={() => navigate(`/app/task/${card.id}`)}
-      className="w-full text-left bg-white border border-[hsl(var(--border))] rounded-xl p-3 relative"
+      className="w-full text-left bg-card border border-border rounded-xl p-3 relative transition-shadow hover:shadow-md"
       style={{ borderLeftWidth: 3, borderLeftColor: borderColor }}
     >
       {/* Row 1: status + type + time */}

@@ -33,7 +33,7 @@ const Login = () => {
           : error.message,
       });
     } else {
-      navigate("/dashboard", { replace: true });
+      navigate("/app/feed", { replace: true });
     }
 
     setLoading(false);
