@@ -130,6 +130,42 @@ export type Database = {
           },
         ]
       }
+      card_contact_assignees: {
+        Row: {
+          assigned_at: string
+          card_id: string
+          contact_id: string
+          id: string
+        }
+        Insert: {
+          assigned_at?: string
+          card_id: string
+          contact_id: string
+          id?: string
+        }
+        Update: {
+          assigned_at?: string
+          card_id?: string
+          contact_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_contact_assignees_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_contact_assignees_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       card_teams: {
         Row: {
           assigned_at: string
