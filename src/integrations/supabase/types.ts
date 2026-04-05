@@ -175,7 +175,10 @@ export type Database = {
           description: string | null
           end_date: string | null
           id: string
+          origin_type: string | null
           priority: string
+          project_id: string | null
+          ritual_occurrence_id: string | null
           start_date: string
           status: string
           title: string
@@ -189,7 +192,10 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           id?: string
+          origin_type?: string | null
           priority?: string
+          project_id?: string | null
+          ritual_occurrence_id?: string | null
           start_date: string
           status?: string
           title: string
@@ -203,7 +209,10 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           id?: string
+          origin_type?: string | null
           priority?: string
+          project_id?: string | null
+          ritual_occurrence_id?: string | null
           start_date?: string
           status?: string
           title?: string
@@ -217,37 +226,364 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_ritual_occurrence_id_fkey"
+            columns: ["ritual_occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "ritual_occurrences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          created_at: string
+          created_by: string
+          department: string | null
+          full_name: string
+          id: string
+          linked_profile_id: string | null
+          phone: string
+          position: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          department?: string | null
+          full_name: string
+          id?: string
+          linked_profile_id?: string | null
+          phone: string
+          position?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          department?: string | null
+          full_name?: string
+          id?: string
+          linked_profile_id?: string | null
+          phone?: string
+          position?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_linked_profile_id_fkey"
+            columns: ["linked_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
+          department: string | null
           full_name: string | null
+          hierarchy_level: string | null
           id: string
           phone: string | null
+          position: string | null
           role: string
+          superior_id: string | null
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          department?: string | null
           full_name?: string | null
+          hierarchy_level?: string | null
           id: string
           phone?: string | null
+          position?: string | null
           role?: string
+          superior_id?: string | null
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          department?: string | null
           full_name?: string | null
+          hierarchy_level?: string | null
           id?: string
           phone?: string | null
+          position?: string | null
           role?: string
+          superior_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_superior_id_fkey"
+            columns: ["superior_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_members: {
+        Row: {
+          id: string
+          joined_at: string
+          profile_id: string
+          project_id: string
+          role: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          profile_id: string
+          project_id: string
+          role?: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          profile_id?: string
+          project_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ritual_members: {
+        Row: {
+          id: string
+          profile_id: string
+          ritual_id: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          ritual_id: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          ritual_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ritual_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ritual_members_ritual_id_fkey"
+            columns: ["ritual_id"]
+            isOneToOne: false
+            referencedRelation: "rituals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ritual_occurrences: {
+        Row: {
+          created_at: string
+          created_by: string
+          date: string
+          id: string
+          notes: string | null
+          ritual_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          date: string
+          id?: string
+          notes?: string | null
+          ritual_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          ritual_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ritual_occurrences_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ritual_occurrences_ritual_id_fkey"
+            columns: ["ritual_id"]
+            isOneToOne: false
+            referencedRelation: "rituals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rituals: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          frequency: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          frequency?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          frequency?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rituals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_history: {
+        Row: {
+          card_id: string
+          context_note: string | null
+          created_at: string
+          id: string
+          ritual_occurrence_id: string | null
+          status_at_time: string | null
+          updated_by: string
+        }
+        Insert: {
+          card_id: string
+          context_note?: string | null
+          created_at?: string
+          id?: string
+          ritual_occurrence_id?: string | null
+          status_at_time?: string | null
+          updated_by: string
+        }
+        Update: {
+          card_id?: string
+          context_note?: string | null
+          created_at?: string
+          id?: string
+          ritual_occurrence_id?: string | null
+          status_at_time?: string | null
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_history_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_history_ritual_occurrence_id_fkey"
+            columns: ["ritual_occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "ritual_occurrences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_history_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       team_members: {
         Row: {
@@ -289,24 +625,30 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          department: string | null
           description: string | null
           id: string
+          is_org_unit: boolean | null
           name: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by: string
+          department?: string | null
           description?: string | null
           id?: string
+          is_org_unit?: boolean | null
           name: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string
+          department?: string | null
           description?: string | null
           id?: string
+          is_org_unit?: boolean | null
           name?: string
           updated_at?: string
         }
@@ -336,6 +678,22 @@ export type Database = {
       }
       is_card_team_member: {
         Args: { p_card_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_project_creator: {
+        Args: { p_project_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_project_member: {
+        Args: { p_project_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_ritual_creator: {
+        Args: { p_ritual_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_ritual_member: {
+        Args: { p_ritual_id: string; p_user_id: string }
         Returns: boolean
       }
       is_team_creator: {
