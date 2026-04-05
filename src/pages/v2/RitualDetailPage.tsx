@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Check, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,14 +12,17 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { format, differenceInDays, addDays, addWeeks, addMonths } from "date-fns";
+import { format, addWeeks, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRituals, FREQ_LABEL } from "@/hooks/useRituals";
 import { useRitualOccurrences } from "@/hooks/useRitualOccurrences";
 import { useCarryForward } from "@/hooks/useCarryForward";
 import OccurrenceDetail from "@/components/rituals/OccurrenceDetail";
-import { Trash2 } from "lucide-react";
+import CarryForwardReviewModal from "@/components/rituals/CarryForwardReviewModal";
 
 const FREQ_BADGE_COLOR: Record<string, string> = {
   weekly: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
@@ -44,20 +47,24 @@ function getNextSuggestion(lastDate: string, frequency: string | null): string |
 export default function RitualDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const { rituals, updateRitual, deleteRitual } = useRituals();
   const { occurrences, isLoading: occsLoading, createOccurrence } = useRitualOccurrences(id);
-  const { pendingCards, executeCarryForward } = useCarryForward(id);
+  const {
+    pendingItems, completedCount, lastOccurrenceDate, lastOccurrenceId,
+  } = useCarryForward(id);
 
   const ritual = rituals.find((r) => r.id === id);
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  // Objective (description) field
+  // Objective field
   const [objective, setObjective] = useState<string | null>(null);
   const objectiveRef = useRef<HTMLTextAreaElement>(null);
-
   const currentObjective = objective ?? ritual?.description ?? "";
 
   const handleObjectiveBlur = useCallback(() => {
@@ -70,25 +77,47 @@ export default function RitualDetailPage() {
 
   const pendingCount = ritual?.lastOccurrence?.pendingCount ?? 0;
 
-  // Next occurrence suggestion
   const lastOcc = occurrences.length > 0 ? occurrences[0] : null;
   const nextSuggestion = lastOcc && ritual?.frequency
     ? getNextSuggestion(lastOcc.date, ritual.frequency)
     : null;
 
-  const handleNewOccurrence = async () => {
-    if (!id) return;
+  const handleConfirmCreate = async (selectedCardIds: string[]) => {
+    if (!id || !user) return;
     setCreating(true);
     try {
       const newOcc = await createOccurrence.mutateAsync();
-      if (pendingCards.length > 0) {
-        await executeCarryForward(newOcc.id);
-        toast.success(`Ocorrência criada com ${pendingCards.length} item(ns) puxados`);
-      } else {
-        toast.success("Nova ocorrência criada");
+
+      // For each selected card: move to new occurrence + record history on PREVIOUS occurrence
+      for (const cardId of selectedCardIds) {
+        const card = pendingItems.find((c) => c.id === cardId);
+        await supabase
+          .from("cards")
+          .update({ ritual_occurrence_id: newOcc.id })
+          .eq("id", cardId);
+
+        await supabase.from("task_history").insert({
+          card_id: cardId,
+          ritual_occurrence_id: lastOccurrenceId,
+          status_at_time: card?.status ?? "pending",
+          updated_by: user.id,
+          context_note: "Carry-forward automático",
+        });
       }
+
+      setReviewOpen(false);
+      qc.invalidateQueries({ queryKey: ["carry-forward", id] });
+      qc.invalidateQueries({ queryKey: ["ritual-occurrences", id] });
+      qc.invalidateQueries({ queryKey: ["rituals"] });
+      qc.invalidateQueries({ queryKey: ["feed-cards"] });
+
+      toast.success(
+        selectedCardIds.length > 0
+          ? `Ocorrência criada com ${selectedCardIds.length} item(ns) puxados`
+          : "Nova ocorrência criada"
+      );
     } catch {
-      // error handled by mutation
+      toast.error("Erro ao criar ocorrência");
     } finally {
       setCreating(false);
     }
@@ -147,13 +176,12 @@ export default function RitualDetailPage() {
           )}
 
           {pendingCount > 0 && (
-            <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-none text-[10px] px-1.5 py-0 h-4 font-medium shrink-0">
+            <Badge className="bg-destructive/10 text-destructive border-none text-[10px] px-1.5 py-0 h-4 font-medium shrink-0">
               {pendingCount}
             </Badge>
           )}
         </div>
 
-        {/* Objective field */}
         <Textarea
           ref={objectiveRef}
           placeholder="Descreva o objetivo desta ritualística..."
@@ -170,21 +198,20 @@ export default function RitualDetailPage() {
         <div className="space-y-1">
           <Button
             className="w-full bg-primary hover:bg-primary/90 h-12 text-sm font-medium"
-            onClick={handleNewOccurrence}
-            disabled={creating}
+            onClick={() => setReviewOpen(true)}
           >
             <Plus size={18} className="mr-2" />
-            {creating ? "Criando..." : "Nova Ocorrência"}
-            {pendingCards.length > 0 && (
+            Nova Ocorrência
+            {pendingItems.length > 0 && (
               <span className="ml-2 text-[10px] opacity-80">
-                ({pendingCards.length} pendente{pendingCards.length !== 1 ? "s" : ""} serão puxados)
+                ({pendingItems.length} pendente{pendingItems.length !== 1 ? "s" : ""})
               </span>
             )}
           </Button>
           {lastOcc && nextSuggestion && (
             <p className="text-[10px] text-muted-foreground text-center">
-              Última ocorrência: {format(new Date(lastOcc.date), "dd/MM/yyyy")}.
-              Baseado na frequência {(FREQ_LABEL[ritual.frequency ?? ""] ?? "").toLowerCase()}, a próxima seria por volta de {nextSuggestion}.
+              Última: {format(new Date(lastOcc.date), "dd/MM/yyyy")}.
+              Próxima sugerida: ~{nextSuggestion} ({(FREQ_LABEL[ritual.frequency ?? ""] ?? "").toLowerCase()}).
             </p>
           )}
         </div>
@@ -215,8 +242,8 @@ export default function RitualDetailPage() {
                       <Badge
                         className={`text-[9px] px-1 py-0 h-3.5 border-none ml-auto ${
                           occ.status === "open"
-                            ? "bg-[#3B82F6]/10 text-[#3B82F6]"
-                            : "bg-[#94A3B8]/10 text-[#94A3B8]"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {occ.status === "open" ? "Aberta" : "Fechada"}
@@ -255,6 +282,18 @@ export default function RitualDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      {/* Carry-forward review modal */}
+      <CarryForwardReviewModal
+        ritualName={ritual.name}
+        pendingItems={pendingItems}
+        completedCount={completedCount}
+        lastOccurrenceDate={lastOccurrenceDate}
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        onConfirm={handleConfirmCreate}
+        isCreating={creating}
+      />
     </div>
   );
 }
