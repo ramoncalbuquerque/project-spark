@@ -61,6 +61,10 @@ export default function RitualDetailPage() {
   const [editName, setEditName] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Deletion stats
+  const [deletionStats, setDeletionStats] = useState<{ occCount: number; cardCount: number } | null>(null);
 
   // Objective field
   const [objective, setObjective] = useState<string | null>(null);
