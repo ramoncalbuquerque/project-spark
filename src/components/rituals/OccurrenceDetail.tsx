@@ -266,6 +266,34 @@ export default function OccurrenceDetail({ occurrence, previousOccurrenceId }: P
     },
   });
 
+  const deleteOccurrence = useMutation({
+    mutationFn: async () => {
+      // 1. Unlink cards
+      await supabase
+        .from("cards")
+        .update({ ritual_occurrence_id: null })
+        .eq("ritual_occurrence_id", occurrence.id);
+      // 2. Unlink task_history
+      await supabase
+        .from("task_history")
+        .update({ ritual_occurrence_id: null })
+        .eq("ritual_occurrence_id", occurrence.id);
+      // 3. Delete occurrence
+      const { error } = await supabase
+        .from("ritual_occurrences")
+        .delete()
+        .eq("id", occurrence.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Ocorrência excluída. As tarefas foram preservadas.");
+      qc.invalidateQueries({ queryKey: ["ritual-occurrences"] });
+      qc.invalidateQueries({ queryKey: ["rituals"] });
+      qc.invalidateQueries({ queryKey: ["carry-forward"] });
+      qc.invalidateQueries({ queryKey: ["feed-cards"] });
+    },
+  });
+
   const handleStatusCycle = (card: OccurrenceCard) => {
     if (!isOpen) return;
     const currentIdx = STATUS_CYCLE.indexOf(card.status);
