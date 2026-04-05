@@ -264,7 +264,25 @@ export default function RitualDetailPage() {
         )}
 
         {/* Delete ritual */}
-        <AlertDialog>
+        <AlertDialog onOpenChange={async (open) => {
+          if (open && id) {
+            // Fetch stats for the confirmation message
+            const { data: occs } = await supabase
+              .from("ritual_occurrences")
+              .select("id")
+              .eq("ritual_id", id);
+            const occIds = (occs ?? []).map((o) => o.id);
+            let cardCount = 0;
+            if (occIds.length > 0) {
+              const { count } = await supabase
+                .from("cards")
+                .select("id", { count: "exact", head: true })
+                .in("ritual_occurrence_id", occIds);
+              cardCount = count ?? 0;
+            }
+            setDeletionStats({ occCount: occIds.length, cardCount });
+          }
+        }}>
           <AlertDialogTrigger asChild>
             <Button variant="destructive" size="sm" className="w-full">
               <Trash2 size={14} className="mr-1" /> Excluir Ritualística
@@ -274,13 +292,50 @@ export default function RitualDetailPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Excluir ritualística?</AlertDialogTitle>
               <AlertDialogDescription>
-                Esta ação não pode ser desfeita. As ocorrências e tarefas vinculadas permanecerão.
+                {deletionStats
+                  ? `A ritualística "${ritual.name}" tem ${deletionStats.occCount} ocorrência${deletionStats.occCount !== 1 ? "s" : ""} e ${deletionStats.cardCount} tarefa${deletionStats.cardCount !== 1 ? "s" : ""} vinculada${deletionStats.cardCount !== 1 ? "s" : ""}.\n\nAs tarefas serão PRESERVADAS no sistema. O histórico de ocorrências e observações será perdido.\n\nDeseja continuar?`
+                  : "Carregando informações..."}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { deleteRitual.mutate(ritual.id); navigate("/app/rituals"); }}>
-                Excluir
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleting || !deletionStats}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    // Fetch all occurrence IDs
+                    const { data: occs } = await supabase
+                      .from("ritual_occurrences")
+                      .select("id")
+                      .eq("ritual_id", ritual.id);
+                    const occIds = (occs ?? []).map((o) => o.id);
+
+                    if (occIds.length > 0) {
+                      // Unlink cards
+                      await supabase
+                        .from("cards")
+                        .update({ ritual_occurrence_id: null })
+                        .in("ritual_occurrence_id", occIds);
+                      // Unlink task_history
+                      await supabase
+                        .from("task_history")
+                        .update({ ritual_occurrence_id: null })
+                        .in("ritual_occurrence_id", occIds);
+                    }
+
+                    // Delete ritual (cascades occurrences + members)
+                    deleteRitual.mutate(ritual.id);
+                    navigate("/app/rituals");
+                    toast.success("Ritualística excluída. As tarefas foram preservadas.");
+                  } catch {
+                    toast.error("Erro ao excluir ritualística");
+                    setDeleting(false);
+                  }
+                }}
+              >
+                Excluir mesmo assim
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
