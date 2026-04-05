@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, AlertTriangle, Check, ArrowLeft } from "lucide-react";
+import { Upload, FileText, AlertTriangle, Check, ArrowLeft, RotateCcw } from "lucide-react";
 
 /* ─── Types ─── */
 type CsvRow = {
@@ -112,6 +112,8 @@ export default function ImportRitualsPage() {
   const [progressPct, setProgressPct] = useState(0);
   const [importLog, setImportLog] = useState<string[]>([]);
   const [finalStats, setFinalStats] = useState({ rituals: 0, occurrences: 0, tasks: 0 });
+  const [failedItems, setFailedItems] = useState<Array<{ item: any; occId: string; cardTitle: string; status: string; personMatch: PersonMatch | null }>>([]);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // People cache
   const [peopleCache, setPeopleCache] = useState<PersonMatch[]>([]);
@@ -205,6 +207,7 @@ export default function ImportRitualsPage() {
     setProgressPct(0);
 
     const log: string[] = [];
+    const failedItemsList: Array<{ item: any; occId: string; cardTitle: string; status: string; personMatch: PersonMatch | null }> = [];
     const addLog = (msg: string) => {
       log.push(msg);
       setImportLog([...log]);
@@ -421,6 +424,7 @@ export default function ImportRitualsPage() {
 
               if (error) {
                 addLog(`⚠️ Erro tarefa '${item.item_title}': ${error.message}`);
+                failedItemsList.push({ item, occId: occInfo.id, cardTitle: item.item_title.trim(), status, personMatch });
                 itemsDone++;
                 continue;
               }
@@ -465,12 +469,74 @@ export default function ImportRitualsPage() {
       }
 
       setFinalStats({ rituals: createdRituals, occurrences: createdOccurrences, tasks: createdTasks });
+      setFailedItems(failedItemsList);
       setStep("done");
       setProgressPct(100);
     } catch (e: any) {
       addLog(`❌ Erro fatal: ${e.message}`);
+      setFailedItems(failedItemsList);
       setStep("done");
     }
+  };
+
+  /* ─── Retry failed items ─── */
+  const doRetryFailed = async () => {
+    if (!user || failedItems.length === 0) return;
+    setIsRetrying(true);
+    const log: string[] = [...importLog];
+    const addLog = (msg: string) => { log.push(msg); setImportLog([...log]); };
+    const stillFailed: typeof failedItems = [];
+    let retried = 0;
+
+    for (const fi of failedItems) {
+      try {
+        const { data: card, error } = await supabase
+          .from("cards")
+          .insert({
+            title: fi.cardTitle,
+            card_type: "task",
+            status: fi.status,
+            start_date: new Date().toISOString(),
+            created_by: user.id,
+            origin_type: "ritual",
+            ritual_occurrence_id: fi.occId,
+          })
+          .select("id")
+          .single();
+
+        if (error) {
+          addLog(`⚠️ Retry falhou '${fi.cardTitle}': ${error.message}`);
+          stillFailed.push(fi);
+          continue;
+        }
+
+        retried++;
+
+        if (fi.personMatch?.type === "profile") {
+          await supabase.from("card_assignees").insert({ card_id: card.id, profile_id: fi.personMatch.id });
+        } else if (fi.personMatch?.type === "contact") {
+          await supabase.from("card_contact_assignees").insert({ card_id: card.id, contact_id: fi.personMatch.id });
+        }
+
+        if (fi.item?.item_context?.trim()) {
+          await supabase.from("task_history").insert({
+            card_id: card.id,
+            ritual_occurrence_id: fi.occId,
+            status_at_time: fi.status,
+            context_note: fi.item.item_context.trim(),
+            updated_by: user.id,
+          });
+        }
+      } catch (e: any) {
+        addLog(`⚠️ Retry falhou '${fi.cardTitle}': ${e.message}`);
+        stillFailed.push(fi);
+      }
+    }
+
+    addLog(`✅ Reimportação: ${retried} tarefas criadas, ${stillFailed.length} ainda com erro`);
+    setFailedItems(stillFailed);
+    setFinalStats((prev) => ({ ...prev, tasks: prev.tasks + retried }));
+    setIsRetrying(false);
   };
 
   if (!isLeader) {
@@ -601,6 +667,17 @@ export default function ImportRitualsPage() {
                 <Button onClick={() => navigate("/app/rituals")} className="mt-2">
                   Ver Ritualísticas
                 </Button>
+                {failedItems.length > 0 && (
+                  <Button
+                    variant="outline"
+                    className="mt-2 gap-2"
+                    onClick={doRetryFailed}
+                    disabled={isRetrying}
+                  >
+                    <RotateCcw size={14} className={isRetrying ? "animate-spin" : ""} />
+                    Reimportar {failedItems.length} erro{failedItems.length > 1 ? "s" : ""}
+                  </Button>
+                )}
               </div>
             )}
 

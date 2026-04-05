@@ -10,6 +10,7 @@ const STATUS_COLOR: Record<string, string> = {
   in_progress: "#3B82F6",
   completed: "#22C55E",
   pending: "#94A3B8",
+  cancelled: "#6B7280",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -17,6 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_progress: "Em andamento",
   completed: "Concluído",
   pending: "Pendente",
+  cancelled: "Cancelado",
 };
 
 const TYPE_ICON: Record<string, { icon: typeof CheckSquare; color: string }> = {
@@ -31,6 +33,8 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
   const displayStatus = card.is_overdue ? "overdue" : card.status;
   const statusColor = STATUS_COLOR[displayStatus] ?? STATUS_COLOR.pending;
   const isCompleted = card.status === "completed";
+  const isCancelled = card.status === "cancelled";
+  const isDimmed = isCompleted || isCancelled;
 
   const hasTime = !card.all_day && card.start_date;
   const timeStr = hasTime ? format(new Date(card.start_date), "HH:mm") : null;
@@ -61,10 +65,10 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
         borderLeftWidth: 3,
         borderLeftColor: statusColor,
         border: "0.5px solid #EEEEE9",
-        borderLeft: `3px solid ${statusColor}`,
+        borderLeft: `3px solid ${isCancelled ? '#6B7280' : statusColor}`,
         borderRadius: "0px 12px 12px 0px",
         padding: 12,
-        opacity: isCompleted ? 0.7 : 1,
+        opacity: isDimmed ? 0.5 : 1,
         backgroundColor: "var(--background, #fff)",
       }}
     >
@@ -127,8 +131,8 @@ export default function FeedCard({ card }: { card: EnrichedFeedCard }) {
         <p
           className="text-sm font-medium leading-snug truncate"
           style={{
-            color: isCompleted ? "#9CA3AF" : "#1A1A1A",
-            textDecoration: isCompleted ? "line-through" : "none",
+            color: isDimmed ? "#9CA3AF" : "#1A1A1A",
+            textDecoration: isDimmed ? "line-through" : "none",
           }}
         >
           {card.title}

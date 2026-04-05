@@ -1,0 +1,2 @@
+ALTER TABLE public.cards DROP CONSTRAINT IF EXISTS cards_status_check;
+ALTER TABLE public.cards ADD CONSTRAINT cards_status_check CHECK (status IN ('pending', 'in_progress', 'completed', 'overdue', 'cancelled'));
