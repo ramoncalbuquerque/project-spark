@@ -22,7 +22,6 @@ export function useAssigneeOptions() {
 
       const result: AssigneeOption[] = [];
 
-      // Profiles first
       for (const p of profilesRes.data ?? []) {
         result.push({
           id: p.id,
@@ -32,7 +31,6 @@ export function useAssigneeOptions() {
         });
       }
 
-      // Contacts without linked profile
       for (const c of contactsRes.data ?? []) {
         if (!c.linked_profile_id) {
           result.push({
@@ -44,7 +42,6 @@ export function useAssigneeOptions() {
         }
       }
 
-      // Sort: current user first
       if (user) {
         result.sort((a, b) => {
           if (a.id === user.id) return -1;
