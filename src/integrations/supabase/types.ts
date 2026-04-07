@@ -710,6 +710,11 @@ export type Database = {
         Args: { _card_id: string; _user_id: string }
         Returns: boolean
       }
+      can_view_card: {
+        Args: { p_card_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      get_department_people: { Args: { p_user_id: string }; Returns: string[] }
       get_user_role: { Args: { _user_id: string }; Returns: string }
       is_card_assignee: {
         Args: { p_card_id: string; p_user_id: string }

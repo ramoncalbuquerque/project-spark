@@ -77,7 +77,7 @@ export function useRitualOccurrences(ritualId: string | undefined) {
 
   const updateOccurrence = useMutation({
     mutationFn: async (input: { id: string; notes?: string; status?: string }) => {
-      const updates: Record<string, unknown> = {};
+      const updates: { notes?: string; status?: string } = {};
       if (input.notes !== undefined) updates.notes = input.notes;
       if (input.status !== undefined) updates.status = input.status;
       const { error } = await supabase.from("ritual_occurrences").update(updates).eq("id", input.id);
