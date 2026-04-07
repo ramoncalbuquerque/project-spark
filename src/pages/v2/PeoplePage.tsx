@@ -1,3 +1,4 @@
+import { canManagePeople, canChangeRoles, type UserRole } from "@/lib/permissions";
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -71,7 +72,8 @@ function findDeptLeader(deptPeople: UnifiedPerson[]): UnifiedPerson | null {
 const PeoplePage = () => {
   const [navStack, setNavStack] = useState<NavItem[]>([{ type: "list" }]);
   const { profile } = useAuth();
-  const isLeader = profile?.role === "leader";
+  const role = (profile?.role || "member") as UserRole;
+  const canManage = canManagePeople(role);
   const { people, departments, stats, isLoading, refetch } = usePeople();
 
   // Modal states elevated here for all views
@@ -82,7 +84,7 @@ const PeoplePage = () => {
   const pushNav = useCallback((item: NavItem) => setNavStack((prev) => [...prev, item]), []);
   const popNav = useCallback(() => setNavStack((prev) => prev.length > 1 ? prev.slice(0, -1) : prev), []);
 
-  const sharedProps = { people, isLeader, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
+  const sharedProps = { people, canManage, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
 
   let content: React.ReactNode;
   switch (current.type) {
@@ -90,7 +92,7 @@ const PeoplePage = () => {
       content = (
         <ListView
           onOrgChart={() => setNavStack([{ type: "departments" }])}
-          isLeader={isLeader}
+          canManage={canManage}
           people={people}
           departments={departments}
           stats={stats}
@@ -137,9 +139,9 @@ const PeoplePage = () => {
 
 /* ── List View ── */
 function ListView({
-  onOrgChart, isLeader, people, departments, stats, isLoading, refetch, onAccountAction, onPhoneAction,
+  onOrgChart, canManage, people, departments, stats, isLoading, refetch, onAccountAction, onPhoneAction,
 }: {
-  onOrgChart: () => void; isLeader: boolean; people: UnifiedPerson[]; departments: string[];
+  onOrgChart: () => void; canManage: boolean; people: UnifiedPerson[]; departments: string[];
   stats: { withAccount: number; withoutAccount: number; withoutPhone: number };
   isLoading: boolean; refetch: () => void;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
@@ -177,7 +179,7 @@ function ListView({
         <Button variant="outline" size="sm" onClick={onOrgChart} className="gap-1.5">
           <Network className="h-4 w-4" /> Organograma
         </Button>
-        {isLeader && (
+        {canManage && (
           <>
             <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={isImporting} className="gap-1.5">
               {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -238,7 +240,7 @@ function ListView({
                 onClick={() => person.has_account ? navigate(`/app/feed?person=${person.id}`) : undefined}
                 onAccountAction={onAccountAction}
                 onPhoneAction={onPhoneAction}
-                isLeader={isLeader}
+                canManage={canManage}
               />
             ))
           )}
@@ -250,11 +252,11 @@ function ListView({
 
 /* ── Person Card (reusable) ── */
 function PersonCard({
-  person, onClick, onAccountAction, onPhoneAction, isLeader, showDept, showChevron, badge,
+  person, onClick, onAccountAction, onPhoneAction, canManage, showDept, showChevron, badge,
 }: {
   person: UnifiedPerson; onClick?: () => void;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
-  isLeader: boolean; showDept?: boolean; showChevron?: boolean; badge?: string;
+  canManage: boolean; showDept?: boolean; showChevron?: boolean; badge?: string;
 }) {
   const initials = getInitials(person.full_name);
 
@@ -286,10 +288,10 @@ function PersonCard({
         )}
         {!showChevron && (
           <>
-            <button onClick={(e) => { e.stopPropagation(); if (!person.has_account && isLeader) onAccountAction(person); }} className="p-1" title={person.has_account ? "Tem conta" : "Sem conta"}>
+            <button onClick={(e) => { e.stopPropagation(); if (!person.has_account && canManage) onAccountAction(person); }} className="p-1" title={person.has_account ? "Tem conta" : "Sem conta"}>
               <User size={16} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); if (!person.has_phone && isLeader) onPhoneAction(person); }} className="p-1" title={person.has_phone ? "Tem telefone" : "Sem telefone"}>
+            <button onClick={(e) => { e.stopPropagation(); if (!person.has_phone && canManage) onPhoneAction(person); }} className="p-1" title={person.has_phone ? "Tem telefone" : "Sem telefone"}>
               <Phone size={16} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
             </button>
           </>
@@ -301,16 +303,16 @@ function PersonCard({
 }
 
 /* ── Status Icons (small inline) ── */
-function StatusIcons({ person, isLeader, onAccountAction, onPhoneAction }: {
-  person: UnifiedPerson; isLeader: boolean;
+function StatusIcons({ person, canManage, onAccountAction, onPhoneAction }: {
+  person: UnifiedPerson; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <button onClick={() => { if (!person.has_account && isLeader) onAccountAction(person); }} className="p-0.5">
+      <button onClick={() => { if (!person.has_account && canManage) onAccountAction(person); }} className="p-0.5">
         <User size={14} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
       </button>
-      <button onClick={() => { if (!person.has_phone && isLeader) onPhoneAction(person); }} className="p-0.5">
+      <button onClick={() => { if (!person.has_phone && canManage) onPhoneAction(person); }} className="p-0.5">
         <Phone size={14} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
       </button>
     </div>
@@ -350,10 +352,10 @@ function NavBreadcrumb({ navStack, people }: { navStack: NavItem[]; people: Unif
 
 /* ── Departments View ── */
 function DepartmentsView({
-  people, departments, isLoading, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+  people, departments, isLoading, pushNav, popNav, canManage, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; departments: string[]; isLoading: boolean;
-  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -425,7 +427,7 @@ function DepartmentsView({
                   onClick={() => pushNav({ type: "person", id: p.id })}
                   onAccountAction={onAccountAction}
                   onPhoneAction={onPhoneAction}
-                  isLeader={isLeader}
+                  canManage={canManage}
                   showDept
                   showChevron
                 />
@@ -470,10 +472,10 @@ function DepartmentsView({
 
 /* ── Department Detail View ── */
 function DepartmentDetailView({
-  people, deptName, navStack, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+  people, deptName, navStack, pushNav, popNav, canManage, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; deptName: string; navStack: NavItem[];
-  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const deptPeople = useMemo(() => people.filter((p) => p.department === deptName), [people, deptName]);
@@ -527,7 +529,7 @@ function DepartmentDetailView({
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{leader.position || "Sem cargo"}</p>
               </div>
-              <StatusIcons person={leader} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+              <StatusIcons person={leader} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
             </button>
           )}
 
@@ -575,7 +577,7 @@ function DepartmentDetailView({
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </>
                         ) : (
-                          <StatusIcons person={p} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                          <StatusIcons person={p} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
                         )}
                       </div>
                     </div>
@@ -604,7 +606,7 @@ function DepartmentDetailView({
                         <p className="text-[11px] text-muted-foreground truncate">{p.position || ""}</p>
                       </div>
                     </button>
-                    <StatusIcons person={p} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                    <StatusIcons person={p} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
                   </div>
                 ))}
               </div>
@@ -618,10 +620,10 @@ function DepartmentDetailView({
 
 /* ── Person Detail View ── */
 function PersonDetailView({
-  people, personId, navStack, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+  people, personId, navStack, pushNav, popNav, canManage, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; personId: string; navStack: NavItem[];
-  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const navigate = useNavigate();
@@ -744,7 +746,7 @@ function PersonDetailView({
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </>
                         ) : (
-                          <StatusIcons person={sub} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                          <StatusIcons person={sub} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
                         )}
                       </div>
                     </div>
@@ -755,7 +757,7 @@ function PersonDetailView({
           )}
 
           {/* Account/Phone actions for this person */}
-          {isLeader && (!person.has_account || !person.has_phone) && (
+          {canManage && (!person.has_account || !person.has_phone) && (
             <div className="flex gap-2 px-1">
               {!person.has_account && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => onAccountAction(person)}>
