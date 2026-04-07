@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Shield, User } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -19,15 +21,35 @@ function rawPhone(value: string) {
   return value.replace(/\D/g, "");
 }
 
+type AccountRole = "leader" | "member" | null;
+
 const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountRole, setAccountRole] = useState<AccountRole>(null);
+  const [department, setDepartment] = useState("");
+  const [departments, setDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("department")
+        .not("department", "is", null);
+      if (data) {
+        const unique = [...new Set(data.map((d) => d.department).filter(Boolean))] as string[];
+        unique.sort((a, b) => a.localeCompare(b, "pt-BR"));
+        setDepartments(unique);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +57,16 @@ const Signup = () => {
     const digits = rawPhone(phone);
     if (digits.length < 10 || digits.length > 11) {
       toast({ variant: "destructive", title: "Erro", description: "Telefone inválido. Use DDD + número." });
+      return;
+    }
+
+    if (!accountRole) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione o tipo de conta." });
+      return;
+    }
+
+    if (accountRole === "leader" && !department) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione o departamento que você lidera." });
       return;
     }
 
@@ -66,10 +98,48 @@ const Signup = () => {
     }
 
     if (data.user) {
+      const profileUpdate: Record<string, string> = {
+        full_name: fullName.trim(),
+        phone: digits,
+        role: accountRole,
+      };
+      if (department) {
+        profileUpdate.department = department;
+      }
+
       await supabase
         .from("profiles")
-        .update({ full_name: fullName.trim(), phone: digits })
+        .update(profileUpdate)
         .eq("id", data.user.id);
+
+      // Link with existing contact by phone
+      const { data: matchingContacts } = await supabase
+        .from("contacts")
+        .select("id, department, position, linked_profile_id")
+        .eq("phone", digits)
+        .is("linked_profile_id", null)
+        .limit(1);
+
+      if (matchingContacts && matchingContacts.length > 0) {
+        const contact = matchingContacts[0];
+
+        await supabase
+          .from("contacts")
+          .update({ linked_profile_id: data.user.id })
+          .eq("id", contact.id);
+
+        // Copy contact metadata to profile if not already set
+        const enrichFields: Record<string, string> = {};
+        if (contact.department && !department) enrichFields.department = contact.department;
+        if (contact.position) enrichFields.position = contact.position;
+
+        if (Object.keys(enrichFields).length > 0) {
+          await supabase
+            .from("profiles")
+            .update(enrichFields)
+            .eq("id", data.user.id);
+        }
+      }
     }
 
     toast({ title: "Conta criada com sucesso!", description: "Faça login para continuar." });
@@ -93,6 +163,61 @@ const Signup = () => {
           <Label htmlFor="phone">Telefone</Label>
           <Input id="phone" type="tel" placeholder="(00) 00000-0000" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} required className="h-11" />
         </div>
+
+        {/* Account type selection */}
+        <div className="space-y-2">
+          <Label>Tipo de conta</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setAccountRole("leader")}
+              className={cn(
+                "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all",
+                accountRole === "leader"
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border hover:border-muted-foreground/30"
+              )}
+            >
+              <Shield className={cn("h-6 w-6", accountRole === "leader" ? "text-primary" : "text-muted-foreground")} />
+              <span className={cn("text-sm font-medium", accountRole === "leader" ? "text-primary" : "text-foreground")}>Líder</span>
+              <span className="text-[11px] leading-tight text-muted-foreground">Crio e delego tarefas para meu time</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAccountRole("member"); setDepartment(""); }}
+              className={cn(
+                "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all",
+                accountRole === "member"
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border hover:border-muted-foreground/30"
+              )}
+            >
+              <User className={cn("h-6 w-6", accountRole === "member" ? "text-primary" : "text-muted-foreground")} />
+              <span className={cn("text-sm font-medium", accountRole === "member" ? "text-primary" : "text-foreground")}>Colaborador</span>
+              <span className="text-[11px] leading-tight text-muted-foreground">Executo tarefas atribuídas a mim</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Department */}
+        {accountRole && departments.length > 0 && (
+          <div className="space-y-2">
+            <Label htmlFor="department">
+              {accountRole === "leader" ? "Qual departamento você lidera?" : "Seu departamento (opcional)"}
+            </Label>
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger className="h-11">
+                <SelectValue placeholder="Selecione o departamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((d) => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="password">Senha</Label>
           <Input id="password" type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="h-11" />
