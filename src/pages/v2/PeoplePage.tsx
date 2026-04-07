@@ -84,7 +84,7 @@ const PeoplePage = () => {
   const pushNav = useCallback((item: NavItem) => setNavStack((prev) => [...prev, item]), []);
   const popNav = useCallback(() => setNavStack((prev) => prev.length > 1 ? prev.slice(0, -1) : prev), []);
 
-  const sharedProps = { people, canManage, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
+  const sharedProps = { people, canManage, userRole: role, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
 
   let content: React.ReactNode;
   switch (current.type) {
