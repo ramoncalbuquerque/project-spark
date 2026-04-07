@@ -156,7 +156,7 @@ export function useRituals() {
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 
-  const isLeader = profile?.role === "leader";
+  const userRole = (profile?.role || 'member') as import("@/lib/permissions").UserRole;
 
-  return { rituals, isLoading, isLeader, createRitual, updateRitual, deleteRitual };
+  return { rituals, isLoading, userRole, createRitual, updateRitual, deleteRitual };
 }

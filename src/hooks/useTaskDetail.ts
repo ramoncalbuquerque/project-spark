@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
+import { canEditCard, canDeleteCard, type UserRole } from "@/lib/permissions";
 
 type Card = Tables<"cards">;
 
@@ -94,8 +95,10 @@ export function useTaskDetail(cardId: string | undefined) {
   });
 
   const isCreator = card?.created_by === user?.id;
-  const isLeader = profile?.role === "leader";
-  const canEditAll = isCreator || isLeader;
+  const isAssignee = card?.assignees.some(a => a.id === user?.id) ?? false;
+  const role = (profile?.role || 'member') as UserRole;
+  const canEditAll = canEditCard(role, isCreator, isAssignee);
+  const canDelete = canDeleteCard(role, isCreator);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey });
@@ -153,5 +156,5 @@ export function useTaskDetail(cardId: string | undefined) {
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 
-  return { card, isLoading, canEditAll, updateCard, updateAssignees, deleteCard };
+  return { card, isLoading, canEditAll, canDelete, userRole: role, updateCard, updateAssignees, deleteCard };
 }

@@ -174,7 +174,7 @@ export function useProjects() {
     onError: (e: Error) => toast.error("Erro: " + e.message),
   });
 
-  const isLeader = profile?.role === "leader";
+  const userRole = (profile?.role || 'member') as import("@/lib/permissions").UserRole;
 
-  return { projects, isLoading, isLeader, createProject, updateProject, deleteProject, addMember, removeMember };
+  return { projects, isLoading, userRole, createProject, updateProject, deleteProject, addMember, removeMember };
 }
