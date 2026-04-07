@@ -18,9 +18,10 @@ export type UnifiedPerson = {
   has_account: boolean;
   has_phone: boolean;
   phone: string | null;
-  contact_id: string | null; // non-null if this person comes from contacts table
+  contact_id: string | null;
   pending_count: number;
   overdue_count: number;
+  role: string;
 };
 
 // Keep for backward compat
@@ -98,6 +99,7 @@ export function usePeople() {
           contact_id: null,
           pending_count: statsMap.get(p.id)?.pending ?? 0,
           overdue_count: statsMap.get(p.id)?.overdue ?? 0,
+          role: p.role || "member",
         };
       });
 
@@ -119,6 +121,7 @@ export function usePeople() {
           contact_id: c.id,
           pending_count: 0,
           overdue_count: 0,
+          role: "member",
         });
       }
 

@@ -45,8 +45,8 @@ const TeamDetailModal = ({ team, onClose }: TeamDetailModalProps) => {
   const allProfiles = useAllProfiles();
 
   const isCreator = team?.created_by === user?.id;
-  const isLeader = profile?.role === "leader";
-  const canEdit = isCreator && isLeader;
+  const canManage = (profile?.role === "master" || profile?.role === "leader");
+  const canEdit = isCreator && canManage;
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");

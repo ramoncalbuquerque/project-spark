@@ -1,3 +1,4 @@
+import { canManagePeople, canChangeRoles, type UserRole } from "@/lib/permissions";
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -71,7 +72,8 @@ function findDeptLeader(deptPeople: UnifiedPerson[]): UnifiedPerson | null {
 const PeoplePage = () => {
   const [navStack, setNavStack] = useState<NavItem[]>([{ type: "list" }]);
   const { profile } = useAuth();
-  const isLeader = profile?.role === "leader";
+  const role = (profile?.role || "member") as UserRole;
+  const canManage = canManagePeople(role);
   const { people, departments, stats, isLoading, refetch } = usePeople();
 
   // Modal states elevated here for all views
@@ -82,7 +84,7 @@ const PeoplePage = () => {
   const pushNav = useCallback((item: NavItem) => setNavStack((prev) => [...prev, item]), []);
   const popNav = useCallback(() => setNavStack((prev) => prev.length > 1 ? prev.slice(0, -1) : prev), []);
 
-  const sharedProps = { people, isLeader, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
+  const sharedProps = { people, canManage, userRole: role, pushNav, popNav, onAccountAction: setAccountModal, onPhoneAction: setPhoneModal };
 
   let content: React.ReactNode;
   switch (current.type) {
@@ -90,7 +92,7 @@ const PeoplePage = () => {
       content = (
         <ListView
           onOrgChart={() => setNavStack([{ type: "departments" }])}
-          isLeader={isLeader}
+          canManage={canManage}
           people={people}
           departments={departments}
           stats={stats}
@@ -137,9 +139,9 @@ const PeoplePage = () => {
 
 /* ── List View ── */
 function ListView({
-  onOrgChart, isLeader, people, departments, stats, isLoading, refetch, onAccountAction, onPhoneAction,
+  onOrgChart, canManage, people, departments, stats, isLoading, refetch, onAccountAction, onPhoneAction,
 }: {
-  onOrgChart: () => void; isLeader: boolean; people: UnifiedPerson[]; departments: string[];
+  onOrgChart: () => void; canManage: boolean; people: UnifiedPerson[]; departments: string[];
   stats: { withAccount: number; withoutAccount: number; withoutPhone: number };
   isLoading: boolean; refetch: () => void;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
@@ -177,7 +179,7 @@ function ListView({
         <Button variant="outline" size="sm" onClick={onOrgChart} className="gap-1.5">
           <Network className="h-4 w-4" /> Organograma
         </Button>
-        {isLeader && (
+        {canManage && (
           <>
             <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={isImporting} className="gap-1.5">
               {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -238,7 +240,7 @@ function ListView({
                 onClick={() => person.has_account ? navigate(`/app/feed?person=${person.id}`) : undefined}
                 onAccountAction={onAccountAction}
                 onPhoneAction={onPhoneAction}
-                isLeader={isLeader}
+                canManage={canManage}
               />
             ))
           )}
@@ -250,11 +252,11 @@ function ListView({
 
 /* ── Person Card (reusable) ── */
 function PersonCard({
-  person, onClick, onAccountAction, onPhoneAction, isLeader, showDept, showChevron, badge,
+  person, onClick, onAccountAction, onPhoneAction, canManage, showDept, showChevron, badge,
 }: {
   person: UnifiedPerson; onClick?: () => void;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
-  isLeader: boolean; showDept?: boolean; showChevron?: boolean; badge?: string;
+  canManage: boolean; showDept?: boolean; showChevron?: boolean; badge?: string;
 }) {
   const initials = getInitials(person.full_name);
 
@@ -266,8 +268,10 @@ function PersonCard({
           <AvatarFallback className="text-xs bg-primary/10 text-primary">{initials}</AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <p className="text-sm font-medium text-foreground truncate">{person.full_name}</p>
+            {person.role === "master" && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-purple-100 text-purple-700 hover:bg-purple-100">Master</Badge>}
+            {person.role === "leader" && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-primary/10 text-primary hover:bg-primary/10">Líder</Badge>}
             {badge && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary">{badge}</Badge>}
           </div>
           <p className="text-xs text-muted-foreground truncate">
@@ -286,10 +290,10 @@ function PersonCard({
         )}
         {!showChevron && (
           <>
-            <button onClick={(e) => { e.stopPropagation(); if (!person.has_account && isLeader) onAccountAction(person); }} className="p-1" title={person.has_account ? "Tem conta" : "Sem conta"}>
+            <button onClick={(e) => { e.stopPropagation(); if (!person.has_account && canManage) onAccountAction(person); }} className="p-1" title={person.has_account ? "Tem conta" : "Sem conta"}>
               <User size={16} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
             </button>
-            <button onClick={(e) => { e.stopPropagation(); if (!person.has_phone && isLeader) onPhoneAction(person); }} className="p-1" title={person.has_phone ? "Tem telefone" : "Sem telefone"}>
+            <button onClick={(e) => { e.stopPropagation(); if (!person.has_phone && canManage) onPhoneAction(person); }} className="p-1" title={person.has_phone ? "Tem telefone" : "Sem telefone"}>
               <Phone size={16} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
             </button>
           </>
@@ -301,16 +305,16 @@ function PersonCard({
 }
 
 /* ── Status Icons (small inline) ── */
-function StatusIcons({ person, isLeader, onAccountAction, onPhoneAction }: {
-  person: UnifiedPerson; isLeader: boolean;
+function StatusIcons({ person, canManage, onAccountAction, onPhoneAction }: {
+  person: UnifiedPerson; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <button onClick={() => { if (!person.has_account && isLeader) onAccountAction(person); }} className="p-0.5">
+      <button onClick={() => { if (!person.has_account && canManage) onAccountAction(person); }} className="p-0.5">
         <User size={14} className={person.has_account ? "text-[#22C55E]" : "text-[#94A3B8]"} />
       </button>
-      <button onClick={() => { if (!person.has_phone && isLeader) onPhoneAction(person); }} className="p-0.5">
+      <button onClick={() => { if (!person.has_phone && canManage) onPhoneAction(person); }} className="p-0.5">
         <Phone size={14} className={person.has_phone ? "text-[#22C55E]" : "text-[#94A3B8]"} />
       </button>
     </div>
@@ -350,10 +354,10 @@ function NavBreadcrumb({ navStack, people }: { navStack: NavItem[]; people: Unif
 
 /* ── Departments View ── */
 function DepartmentsView({
-  people, departments, isLoading, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+  people, departments, isLoading, pushNav, popNav, canManage, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; departments: string[]; isLoading: boolean;
-  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const [search, setSearch] = useState("");
@@ -425,7 +429,7 @@ function DepartmentsView({
                   onClick={() => pushNav({ type: "person", id: p.id })}
                   onAccountAction={onAccountAction}
                   onPhoneAction={onPhoneAction}
-                  isLeader={isLeader}
+                  canManage={canManage}
                   showDept
                   showChevron
                 />
@@ -470,10 +474,10 @@ function DepartmentsView({
 
 /* ── Department Detail View ── */
 function DepartmentDetailView({
-  people, deptName, navStack, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+  people, deptName, navStack, pushNav, popNav, canManage, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; deptName: string; navStack: NavItem[];
-  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const deptPeople = useMemo(() => people.filter((p) => p.department === deptName), [people, deptName]);
@@ -527,7 +531,7 @@ function DepartmentDetailView({
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{leader.position || "Sem cargo"}</p>
               </div>
-              <StatusIcons person={leader} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+              <StatusIcons person={leader} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
             </button>
           )}
 
@@ -575,7 +579,7 @@ function DepartmentDetailView({
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </>
                         ) : (
-                          <StatusIcons person={p} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                          <StatusIcons person={p} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
                         )}
                       </div>
                     </div>
@@ -604,7 +608,7 @@ function DepartmentDetailView({
                         <p className="text-[11px] text-muted-foreground truncate">{p.position || ""}</p>
                       </div>
                     </button>
-                    <StatusIcons person={p} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                    <StatusIcons person={p} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
                   </div>
                 ))}
               </div>
@@ -618,20 +622,49 @@ function DepartmentDetailView({
 
 /* ── Person Detail View ── */
 function PersonDetailView({
-  people, personId, navStack, pushNav, popNav, isLeader, onAccountAction, onPhoneAction,
+  people, personId, navStack, pushNav, popNav, canManage, userRole, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; personId: string; navStack: NavItem[];
-  pushNav: (item: NavItem) => void; popNav: () => void; isLeader: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean; userRole: UserRole;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const navigate = useNavigate();
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [newRole, setNewRole] = useState<string>("");
+  const [newDepartment, setNewDepartment] = useState<string>("");
+  const [savingRole, setSavingRole] = useState(false);
   const person = people.find((p) => p.id === personId);
-  if (!person) return <p className="text-sm text-muted-foreground text-center py-8">Pessoa não encontrada</p>;
-
-  const superior = person.superior_id ? people.find((p) => p.id === person.superior_id) : null;
-  const subordinates = findSubordinates(person, people);
+  const superior = person?.superior_id ? people.find((p) => p.id === person.superior_id) : null;
+  const subordinates = person ? findSubordinates(person, people) : [];
+  const allDepartments = [...new Set(people.map((p) => p.department).filter(Boolean))] as string[];
 
   const levelLabel: Record<string, string> = { alto: "Alto", medio: "Médio", médio: "Médio", baixo: "Baixo" };
+  const isMaster = canChangeRoles(userRole);
+
+  const handleSaveRole = async () => {
+    if (!person || !newRole) return;
+    setSavingRole(true);
+    try {
+      const update: { role: string; department?: string } = { role: newRole };
+      if (newRole === "leader" && newDepartment) update.department = newDepartment;
+      const { error } = await supabase.from("profiles").update(update).eq("id", person.id);
+      if (error) throw error;
+      toast.success("Papel atualizado com sucesso");
+      setShowRoleModal(false);
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  if (!person) return <p className="text-sm text-muted-foreground text-center py-8">Pessoa não encontrada</p>;
+
+  const roleChip = person.role === "master"
+    ? <Badge className="text-[9px] px-1.5 py-0 h-4 bg-purple-100 text-purple-700 hover:bg-purple-100">Master</Badge>
+    : person.role === "leader"
+    ? <Badge className="text-[9px] px-1.5 py-0 h-4 bg-primary/10 text-primary hover:bg-primary/10">Líder</Badge>
+    : null;
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -654,7 +687,10 @@ function PersonDetailView({
                 <AvatarFallback className="text-sm bg-primary/10 text-primary">{getInitials(person.full_name)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-medium text-foreground">{person.full_name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-base font-medium text-foreground">{person.full_name}</p>
+                  {roleChip}
+                </div>
                 <p className="text-[13px] text-muted-foreground">{person.position || "Sem cargo"}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {person.department && (
@@ -671,6 +707,22 @@ function PersonDetailView({
               </div>
             </div>
           </div>
+
+          {/* Role management (master only) */}
+          {isMaster && person.has_account && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={() => {
+                setNewRole(person.role);
+                setNewDepartment(person.department || "");
+                setShowRoleModal(true);
+              }}
+            >
+              Alterar papel
+            </Button>
+          )}
 
           {/* Action buttons */}
           <div className="flex gap-2">
@@ -733,7 +785,11 @@ function PersonDetailView({
                           <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getInitials(sub.full_name)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{sub.full_name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-foreground truncate">{sub.full_name}</p>
+                            {sub.role === "master" && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-purple-100 text-purple-700 hover:bg-purple-100">Master</Badge>}
+                            {sub.role === "leader" && <Badge className="text-[9px] px-1.5 py-0 h-4 bg-primary/10 text-primary hover:bg-primary/10">Líder</Badge>}
+                          </div>
                           <p className="text-[11px] text-muted-foreground truncate">{sub.position || ""}</p>
                         </div>
                       </button>
@@ -744,7 +800,7 @@ function PersonDetailView({
                             <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </>
                         ) : (
-                          <StatusIcons person={sub} isLeader={isLeader} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
+                          <StatusIcons person={sub} canManage={canManage} onAccountAction={onAccountAction} onPhoneAction={onPhoneAction} />
                         )}
                       </div>
                     </div>
@@ -755,7 +811,7 @@ function PersonDetailView({
           )}
 
           {/* Account/Phone actions for this person */}
-          {isLeader && (!person.has_account || !person.has_phone) && (
+          {canManage && (!person.has_account || !person.has_phone) && (
             <div className="flex gap-2 px-1">
               {!person.has_account && (
                 <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => onAccountAction(person)}>
@@ -771,6 +827,58 @@ function PersonDetailView({
           )}
         </div>
       </ScrollArea>
+
+      {/* Role change modal */}
+      <Dialog open={showRoleModal} onOpenChange={setShowRoleModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alterar papel</DialogTitle>
+            <DialogDescription>Selecione o novo papel para {person.full_name}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            {[
+              { value: "master", label: "Master", desc: "Acesso total ao sistema", activeClass: "border-purple-300 bg-purple-50" },
+              { value: "leader", label: "Líder", desc: "Cria e gerencia tarefas do departamento", activeClass: "border-primary bg-primary/5" },
+              { value: "member", label: "Colaborador", desc: "Executa tarefas atribuídas", activeClass: "border-border bg-accent" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setNewRole(opt.value)}
+                className={`w-full text-left rounded-xl border-2 p-3 transition-all ${
+                  newRole === opt.value ? opt.activeClass + " shadow-sm" : "border-border hover:border-muted-foreground/30"
+                }`}
+              >
+                <p className="text-sm font-medium">{opt.label}</p>
+                <p className="text-[11px] text-muted-foreground">{opt.desc}</p>
+              </button>
+            ))}
+
+            {newRole === "leader" && !person.department && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Departamento (obrigatório para líderes)</Label>
+                <Select value={newDepartment} onValueChange={setNewDepartment}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allDepartments.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <Button
+              className="w-full"
+              onClick={handleSaveRole}
+              disabled={!newRole || savingRole || (newRole === "leader" && !person.department && !newDepartment)}
+            >
+              {savingRole ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

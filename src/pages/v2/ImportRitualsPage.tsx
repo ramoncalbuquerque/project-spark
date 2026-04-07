@@ -118,7 +118,7 @@ export default function ImportRitualsPage() {
   // People cache
   const [peopleCache, setPeopleCache] = useState<PersonMatch[]>([]);
 
-  const isLeader = profile?.role === "leader";
+  const isLeader = profile?.role === "leader" || profile?.role === "master";
 
   /* ─── Step 1: Parse CSV ─── */
   const handleFile = async (file: File) => {

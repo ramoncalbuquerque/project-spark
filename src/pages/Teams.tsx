@@ -8,13 +8,15 @@ import { ptBR } from "date-fns/locale";
 import CreateTeamModal from "@/components/teams/CreateTeamModal";
 import TeamDetailModal from "@/components/teams/TeamDetailModal";
 import type { Tables } from "@/integrations/supabase/types";
+import { canManageTeams, type UserRole } from "@/lib/permissions";
 
 type Team = Tables<"teams"> & { member_count: number };
 
 const Teams = () => {
   const { profile } = useAuth();
   const { teams, isLoading } = useTeams();
-  const isLeader = profile?.role === "leader";
+  const role = (profile?.role || 'member') as UserRole;
+  const canManage = canManageTeams(role);
 
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -32,7 +34,7 @@ const Teams = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl md:text-2xl font-bold text-foreground">Times</h1>
-        {isLeader && (
+        {canManage && (
           <Button onClick={() => setShowCreate(true)} size="sm">
             <Plus className="h-4 w-4 mr-1" />
             Novo Time
@@ -48,11 +50,11 @@ const Teams = () => {
             Nenhum time encontrado
           </h2>
           <p className="text-sm text-muted-foreground max-w-xs">
-            {isLeader
+            {canManage
               ? "Crie seu primeiro time para começar a organizar sua equipe!"
               : "Você ainda não faz parte de nenhum time."}
           </p>
-          {isLeader && (
+          {canManage && (
             <Button onClick={() => setShowCreate(true)} className="mt-4" size="sm">
               <Plus className="h-4 w-4 mr-1" />
               Criar Time
