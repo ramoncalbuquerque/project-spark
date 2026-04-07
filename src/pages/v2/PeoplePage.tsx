@@ -708,6 +708,22 @@ function PersonDetailView({
             </div>
           </div>
 
+          {/* Role management (master only) */}
+          {isMaster && person.has_account && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5"
+              onClick={() => {
+                setNewRole(person.role);
+                setNewDepartment(person.department || "");
+                setShowRoleModal(true);
+              }}
+            >
+              Alterar papel
+            </Button>
+          )}
+
           {/* Action buttons */}
           <div className="flex gap-2">
             <Button
