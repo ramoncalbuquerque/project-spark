@@ -31,6 +31,8 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [accountRole, setAccountRole] = useState<AccountRole>(null);
   const [department, setDepartment] = useState("");
+  const [customDepartment, setCustomDepartment] = useState("");
+  const [showCustomDept, setShowCustomDept] = useState(false);
   const [departments, setDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -38,14 +40,9 @@ const Signup = () => {
 
   useEffect(() => {
     const fetchDepartments = async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("department")
-        .not("department", "is", null);
+      const { data } = await supabase.rpc("get_departments");
       if (data) {
-        const unique = [...new Set(data.map((d) => d.department).filter(Boolean))] as string[];
-        unique.sort((a, b) => a.localeCompare(b, "pt-BR"));
-        setDepartments(unique);
+        setDepartments(data as string[]);
       }
     };
     fetchDepartments();
@@ -65,8 +62,10 @@ const Signup = () => {
       return;
     }
 
-    if (accountRole === "leader" && !department) {
-      toast({ variant: "destructive", title: "Erro", description: "Selecione o departamento que você lidera." });
+    const finalDepartment = showCustomDept ? customDepartment.trim() : department;
+
+    if (accountRole === "leader" && !finalDepartment) {
+      toast({ variant: "destructive", title: "Erro", description: "Informe o departamento que você lidera." });
       return;
     }
 
@@ -104,7 +103,7 @@ const Signup = () => {
           full_name: fullName.trim(),
           phone: digits,
           role: accountRole,
-          department: department || null,
+          department: (showCustomDept ? customDepartment.trim() : department) || null,
         })
         .eq("id", data.user.id);
 
@@ -126,7 +125,7 @@ const Signup = () => {
 
         // Copy contact metadata to profile if not already set
         const enrichUpdate: { department?: string; position?: string } = {};
-        if (contact.department && !department) enrichUpdate.department = contact.department;
+        if (contact.department && !finalDepartment) enrichUpdate.department = contact.department;
         if (contact.position) enrichUpdate.position = contact.position;
 
         if (Object.keys(enrichUpdate).length > 0) {
@@ -196,21 +195,51 @@ const Signup = () => {
         </div>
 
         {/* Department */}
-        {accountRole && departments.length > 0 && (
+        {accountRole && (
           <div className="space-y-2">
             <Label htmlFor="department">
               {accountRole === "leader" ? "Qual departamento você lidera?" : "Seu departamento (opcional)"}
             </Label>
-            <Select value={department} onValueChange={setDepartment}>
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Selecione o departamento" />
-              </SelectTrigger>
-              <SelectContent>
-                {departments.map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!showCustomDept ? (
+              <Select
+                value={department}
+                onValueChange={(val) => {
+                  if (val === "__other__") {
+                    setShowCustomDept(true);
+                    setDepartment("");
+                  } else {
+                    setDepartment(val);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Selecione o departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                  <SelectItem value="__other__">Outro (digitar)</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nome do departamento"
+                  value={customDepartment}
+                  onChange={(e) => setCustomDepartment(e.target.value)}
+                  className="h-11"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 shrink-0"
+                  onClick={() => { setShowCustomDept(false); setCustomDepartment(""); }}
+                >
+                  Voltar
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
