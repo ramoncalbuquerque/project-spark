@@ -622,13 +622,17 @@ function DepartmentDetailView({
 
 /* ── Person Detail View ── */
 function PersonDetailView({
-  people, personId, navStack, pushNav, popNav, canManage, onAccountAction, onPhoneAction,
+  people, personId, navStack, pushNav, popNav, canManage, userRole, onAccountAction, onPhoneAction,
 }: {
   people: UnifiedPerson[]; personId: string; navStack: NavItem[];
-  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean;
+  pushNav: (item: NavItem) => void; popNav: () => void; canManage: boolean; userRole: UserRole;
   onAccountAction: (p: UnifiedPerson) => void; onPhoneAction: (p: UnifiedPerson) => void;
 }) {
   const navigate = useNavigate();
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [newRole, setNewRole] = useState<string>("");
+  const [newDepartment, setNewDepartment] = useState<string>("");
+  const [savingRole, setSavingRole] = useState(false);
   const person = people.find((p) => p.id === personId);
   if (!person) return <p className="text-sm text-muted-foreground text-center py-8">Pessoa não encontrada</p>;
 
