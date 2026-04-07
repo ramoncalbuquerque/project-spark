@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProjects } from "@/hooks/useProjects";
 import ProjectCard from "@/components/projects/ProjectCard";
 import CreateProjectModal from "@/components/projects/CreateProjectModal";
+import { canCreateProject } from "@/lib/permissions";
 
 type ProjectStatusFilter = "active" | "completed" | "archived";
 
@@ -15,7 +16,7 @@ const STATUS_FILTERS: { key: ProjectStatusFilter; label: string }[] = [
 ];
 
 const ProjectsPage = () => {
-  const { projects, isLoading, isLeader, createProject } = useProjects();
+  const { projects, isLoading, userRole, createProject } = useProjects();
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ProjectStatusFilter>("active");
 
@@ -25,7 +26,7 @@ const ProjectsPage = () => {
     <div className="flex flex-col h-full bg-background">
       <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background z-10">
         <h1 className="text-lg font-semibold text-foreground">Projetos</h1>
-        {isLeader && (
+        {canCreateProject(userRole) && (
           <Button size="sm" className="h-8 px-3 text-xs" onClick={() => setShowCreate(true)}>
             <Plus size={14} className="mr-1" /> Novo
           </Button>

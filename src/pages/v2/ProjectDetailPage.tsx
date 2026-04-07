@@ -21,6 +21,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { canEditCard, canCreateProject, type UserRole } from "@/lib/permissions";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -74,8 +75,8 @@ export default function ProjectDetailPage() {
   const [showMeetingModal, setShowMeetingModal] = useState(false);
 
   const isCreator = project?.created_by === user?.id;
-  const isLeader = profile?.role === "leader";
-  const canEdit = isCreator || isLeader;
+  const role = (profile?.role || 'member') as UserRole;
+  const canEdit = isCreator || canCreateProject(role);
 
   // Initialize description draft
   if (project && descDraft === null) {

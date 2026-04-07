@@ -6,9 +6,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRituals } from "@/hooks/useRituals";
 import RitualCard from "@/components/rituals/RitualCard";
 import CreateRitualModal from "@/components/rituals/CreateRitualModal";
+import { canCreateRitual } from "@/lib/permissions";
 
 export default function RitualsPage() {
-  const { rituals, isLoading, isLeader, createRitual } = useRituals();
+  const { rituals, isLoading, userRole, createRitual } = useRituals();
   const [showCreate, setShowCreate] = useState(false);
   const navigate = useNavigate();
 
@@ -16,7 +17,7 @@ export default function RitualsPage() {
     <div className="flex flex-col h-full bg-background">
       <div className="flex items-center justify-between px-4 py-3 sticky top-0 bg-background z-10">
         <h1 className="text-lg font-semibold text-foreground">Ritualísticas</h1>
-        {isLeader && (
+        {canCreateRitual(userRole) && (
           <div className="flex items-center gap-1.5">
             <Button
               variant="outline"

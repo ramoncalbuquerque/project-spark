@@ -7,10 +7,10 @@ import { Plus, Trash2, GripVertical } from "lucide-react";
 
 interface AgendaSectionProps {
   cardId: string;
-  isLeader: boolean;
+  canEdit: boolean;
 }
 
-const AgendaSection = ({ cardId, isLeader }: AgendaSectionProps) => {
+const AgendaSection = ({ cardId, canEdit }: AgendaSectionProps) => {
   const { items, addItem, toggleItem, deleteItem, reorderItems } = useAgendaItems(cardId);
   const [newItem, setNewItem] = useState("");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -69,14 +69,14 @@ const AgendaSection = ({ cardId, isLeader }: AgendaSectionProps) => {
             className={`flex items-center gap-2 group rounded px-1 py-1 min-h-[36px] ${
               dragIdx === idx ? "opacity-40" : ""
             } hover:bg-muted/50`}
-            draggable={isLeader}
+            draggable={canEdit}
             onDragStart={() => handleDragStart(idx)}
             onDragOver={(e) => handleDragOver(e, idx)}
             onDrop={handleDrop}
             onMouseEnter={() => setHoveredId(item.id)}
             onMouseLeave={() => setHoveredId(null)}
           >
-            {isLeader && (
+            {canEdit && (
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 cursor-grab shrink-0" />
             )}
             <Checkbox
@@ -93,7 +93,7 @@ const AgendaSection = ({ cardId, isLeader }: AgendaSectionProps) => {
             >
               {item.content}
             </span>
-            {isLeader && hoveredId === item.id && (
+            {canEdit && hoveredId === item.id && (
               <button
                 onClick={() => deleteItem.mutate(item.id)}
                 className="shrink-0 p-1 rounded hover:bg-destructive/10 text-destructive"
@@ -105,7 +105,7 @@ const AgendaSection = ({ cardId, isLeader }: AgendaSectionProps) => {
         ))}
       </div>
 
-      {isLeader && (
+      {canEdit && (
         <div className="flex items-center gap-2">
           <Input
             value={newItem}
