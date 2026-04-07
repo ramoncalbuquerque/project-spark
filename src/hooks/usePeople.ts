@@ -99,6 +99,7 @@ export function usePeople() {
           contact_id: null,
           pending_count: statsMap.get(p.id)?.pending ?? 0,
           overdue_count: statsMap.get(p.id)?.overdue ?? 0,
+          role: p.role || "member",
         };
       });
 
