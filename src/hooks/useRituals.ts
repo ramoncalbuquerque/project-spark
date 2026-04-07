@@ -136,7 +136,7 @@ export function useRituals() {
 
   const updateRitual = useMutation({
     mutationFn: async (input: { id: string; name?: string; description?: string; frequency?: string }) => {
-      const updates: Record<string, unknown> = {};
+      const updates: { name?: string; description?: string; frequency?: string } = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.description !== undefined) updates.description = input.description;
       if (input.frequency !== undefined) updates.frequency = input.frequency;
