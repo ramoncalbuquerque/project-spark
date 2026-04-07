@@ -98,18 +98,14 @@ const Signup = () => {
     }
 
     if (data.user) {
-      const profileUpdate: Record<string, string> = {
-        full_name: fullName.trim(),
-        phone: digits,
-        role: accountRole,
-      };
-      if (department) {
-        profileUpdate.department = department;
-      }
-
       await supabase
         .from("profiles")
-        .update(profileUpdate)
+        .update({
+          full_name: fullName.trim(),
+          phone: digits,
+          role: accountRole,
+          department: department || null,
+        })
         .eq("id", data.user.id);
 
       // Link with existing contact by phone
@@ -129,14 +125,14 @@ const Signup = () => {
           .eq("id", contact.id);
 
         // Copy contact metadata to profile if not already set
-        const enrichFields: Record<string, string> = {};
-        if (contact.department && !department) enrichFields.department = contact.department;
-        if (contact.position) enrichFields.position = contact.position;
+        const enrichUpdate: { department?: string; position?: string } = {};
+        if (contact.department && !department) enrichUpdate.department = contact.department;
+        if (contact.position) enrichUpdate.position = contact.position;
 
-        if (Object.keys(enrichFields).length > 0) {
+        if (Object.keys(enrichUpdate).length > 0) {
           await supabase
             .from("profiles")
-            .update(enrichFields)
+            .update(enrichUpdate)
             .eq("id", data.user.id);
         }
       }
