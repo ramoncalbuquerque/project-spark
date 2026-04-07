@@ -121,6 +121,7 @@ export function usePeople() {
           contact_id: c.id,
           pending_count: 0,
           overdue_count: 0,
+          role: "member",
         });
       }
 
