@@ -823,6 +823,58 @@ function PersonDetailView({
           )}
         </div>
       </ScrollArea>
+
+      {/* Role change modal */}
+      <Dialog open={showRoleModal} onOpenChange={setShowRoleModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Alterar papel</DialogTitle>
+            <DialogDescription>Selecione o novo papel para {person.full_name}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            {[
+              { value: "master", label: "Master", desc: "Acesso total ao sistema", activeClass: "border-purple-300 bg-purple-50" },
+              { value: "leader", label: "Líder", desc: "Cria e gerencia tarefas do departamento", activeClass: "border-primary bg-primary/5" },
+              { value: "member", label: "Colaborador", desc: "Executa tarefas atribuídas", activeClass: "border-border bg-accent" },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setNewRole(opt.value)}
+                className={`w-full text-left rounded-xl border-2 p-3 transition-all ${
+                  newRole === opt.value ? opt.activeClass + " shadow-sm" : "border-border hover:border-muted-foreground/30"
+                }`}
+              >
+                <p className="text-sm font-medium">{opt.label}</p>
+                <p className="text-[11px] text-muted-foreground">{opt.desc}</p>
+              </button>
+            ))}
+
+            {newRole === "leader" && !person.department && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Departamento (obrigatório para líderes)</Label>
+                <Select value={newDepartment} onValueChange={setNewDepartment}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allDepartments.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <Button
+              className="w-full"
+              onClick={handleSaveRole}
+              disabled={!newRole || savingRole || (newRole === "leader" && !person.department && !newDepartment)}
+            >
+              {savingRole ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
