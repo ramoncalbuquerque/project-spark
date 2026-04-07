@@ -634,12 +634,37 @@ function PersonDetailView({
   const [newDepartment, setNewDepartment] = useState<string>("");
   const [savingRole, setSavingRole] = useState(false);
   const person = people.find((p) => p.id === personId);
-  if (!person) return <p className="text-sm text-muted-foreground text-center py-8">Pessoa não encontrada</p>;
-
-  const superior = person.superior_id ? people.find((p) => p.id === person.superior_id) : null;
-  const subordinates = findSubordinates(person, people);
+  const superior = person?.superior_id ? people.find((p) => p.id === person.superior_id) : null;
+  const subordinates = person ? findSubordinates(person, people) : [];
+  const allDepartments = [...new Set(people.map((p) => p.department).filter(Boolean))] as string[];
 
   const levelLabel: Record<string, string> = { alto: "Alto", medio: "Médio", médio: "Médio", baixo: "Baixo" };
+  const isMaster = canChangeRoles(userRole);
+
+  const handleSaveRole = async () => {
+    if (!person || !newRole) return;
+    setSavingRole(true);
+    try {
+      const update: { role: string; department?: string } = { role: newRole };
+      if (newRole === "leader" && newDepartment) update.department = newDepartment;
+      const { error } = await supabase.from("profiles").update(update).eq("id", person.id);
+      if (error) throw error;
+      toast.success("Papel atualizado com sucesso");
+      setShowRoleModal(false);
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  if (!person) return <p className="text-sm text-muted-foreground text-center py-8">Pessoa não encontrada</p>;
+
+  const roleChip = person.role === "master"
+    ? <Badge className="text-[9px] px-1.5 py-0 h-4 bg-purple-100 text-purple-700 hover:bg-purple-100">Master</Badge>
+    : person.role === "leader"
+    ? <Badge className="text-[9px] px-1.5 py-0 h-4 bg-primary/10 text-primary hover:bg-primary/10">Líder</Badge>
+    : null;
 
   return (
     <div className="flex flex-col h-full gap-3">
