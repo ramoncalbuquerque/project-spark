@@ -1,51 +1,38 @@
-# Importação em massa de Ritualísticas históricas
 
-## Resumo
-Criar página temporária `/app/import-rituals` para importação CSV de dados históricos de ritualísticas com carry-forward. Adicionar status "cancelled" ao sistema.
 
-## Mudanças
+## Problem
 
-### 1. Adicionar status "cancelled" ao sistema
-- Adicionar visual para cancelled: ícone X vermelho, texto riscado com opacity 0.5
-- Atualizar `OccurrenceDetail.tsx` (renderização de status dos cards na ocorrência)
-- NÃO tocar em FeedCard conforme instrução
+The department selector on the signup page never appears for two reasons:
 
-### 2. Criar página ImportRitualsPage.tsx
-Página com 3 telas (estados):
+1. **RLS blocks the query**: The `profiles` table requires `authenticated` role for SELECT. On `/signup`, the user is unauthenticated, so `SELECT department FROM profiles` returns empty → `departments.length === 0` → dropdown hidden.
 
-**Tela 1 — Upload**: Botão upload CSV, texto com formato esperado
+2. **No way to create a new department**: Even if the query worked, a leader of a brand-new department couldn't type their own department name.
 
-**Tela 2 — Preview**: Após parsing do CSV:
-- Resumo: N ritualísticas · N ocorrências · N tarefas · N carry-forwards
-- Lista com nome, responsável (match/warning), contadores
-- Warnings de responsáveis não encontrados
-- Botões "Importar tudo" + "Cancelar"
+## Solution
 
-**Tela 3 — Progresso**: Progress bar com fases, log de erros/warnings, botão final
+### 1. Database: Allow anonymous read of department list
 
-**Lógica de importação**:
-1. Agrupar CSV por ritual_name → criar rituals + ritual_members
-2. Agrupar por ritual_name + occurrence_date → criar ritual_occurrences (status=closed)
-3. Processar itens em ordem cronológica por ritualística:
-   - Mapa `Map<key, {card_id, lastStatus, lastContext, lastOccId}>` para carry-forward
-   - Normalização: lowercase, trim, remover parênteses, fuzzy match (primeiras palavras)
-   - Primeira aparição → criar card + task_history + card_assignees
-   - Reaparição → atualizar card status/occurrence, criar task_history com dados anteriores
-4. Batches de 10, erros não param importação
+Create a `SECURITY DEFINER` function that returns distinct department names without requiring authentication:
 
-### 3. Rota e navegação
-- Rota `/app/import-rituals` no App.tsx (dentro de ProtectedRoute)
-- Botão na RitualsPage visível apenas para leaders
-- Buscar profiles e contacts para matching de responsáveis
+```sql
+CREATE OR REPLACE FUNCTION public.get_departments()
+RETURNS SETOF TEXT AS $$
+  SELECT DISTINCT department FROM public.profiles
+  WHERE department IS NOT NULL
+  ORDER BY department
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+```
 
-## Arquivos
+### 2. Frontend: Use the RPC function + allow custom input
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/v2/ImportRitualsPage.tsx` | **NOVO** — Página completa de importação |
-| `src/App.tsx` | Adicionar rota |
-| `src/pages/v2/RitualsPage.tsx` | Botão "Importar R.A.s históricas" para leaders |
-| `src/components/rituals/OccurrenceDetail.tsx` | Visual do status cancelled |
+In `Signup.tsx`:
 
-## NÃO tocar em
-Feed, Projetos, TaskDetail, Pessoas, Agenda, schema do banco
+- Replace the direct `supabase.from("profiles").select("department")` with `supabase.rpc("get_departments")`
+- Change the condition from `departments.length > 0` to just `accountRole` (always show when a role is selected)
+- Add a "Outro" option at the end of the Select that reveals a text Input for typing a custom department name
+- This way leaders can pick an existing department OR create a new one
+
+### Files changed
+- **Migration**: New SQL function `get_departments()`
+- **`src/pages/Signup.tsx`**: Switch to RPC call, always show department field when role selected, add custom department input option
+
