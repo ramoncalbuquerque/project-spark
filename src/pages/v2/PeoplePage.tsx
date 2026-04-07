@@ -687,7 +687,10 @@ function PersonDetailView({
                 <AvatarFallback className="text-sm bg-primary/10 text-primary">{getInitials(person.full_name)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-medium text-foreground">{person.full_name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-base font-medium text-foreground">{person.full_name}</p>
+                  {roleChip}
+                </div>
                 <p className="text-[13px] text-muted-foreground">{person.position || "Sem cargo"}</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {person.department && (
