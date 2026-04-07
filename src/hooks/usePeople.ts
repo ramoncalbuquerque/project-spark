@@ -18,9 +18,10 @@ export type UnifiedPerson = {
   has_account: boolean;
   has_phone: boolean;
   phone: string | null;
-  contact_id: string | null; // non-null if this person comes from contacts table
+  contact_id: string | null;
   pending_count: number;
   overdue_count: number;
+  role: string;
 };
 
 // Keep for backward compat
